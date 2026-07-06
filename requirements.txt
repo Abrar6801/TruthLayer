@@ -1,0 +1,11 @@
+# Runtime dependencies, pinned. Update deliberately, one at a time.
+anthropic==0.116.0
+httpx==0.28.1
+langchain-text-splitters==1.1.2
+numpy==2.5.1
+pydantic==2.13.4
+python-dotenv==1.2.2
+sentence-transformers==5.6.0
+supabase==2.31.0
+tenacity==9.1.4
+trafilatura==2.1.0

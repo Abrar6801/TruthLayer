@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "truthlayer"
+version = "0.1.0"
+description = "Agentic RAG fact-checking tool: search the web, retrieve evidence, render a cited verdict."
+requires-python = ">=3.11"
+# Runtime dependencies are pinned in requirements.txt; this package metadata
+# exists so `pip install -e .` puts src/truthlayer on the import path.
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# The few-shot JSON examples in the judge prompt are deliberately single-line.
+"src/truthlayer/verdict.py" = ["E501"]
+
+[tool.mypy]
+# 3.12+ because numpy's bundled type stubs use the `type` statement.
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["truthlayer"]
+
+[[tool.mypy.overrides]]
+# These libraries ship without type stubs; don't fail the build on them.
+module = [
+    "trafilatura.*",
+    "sentence_transformers.*",
+    "supabase.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
