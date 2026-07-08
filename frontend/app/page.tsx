@@ -1,16 +1,31 @@
 "use client";
 
-// Single-page claim checker. Client-side fetch (not a Server Action) because
-// the request runs 10-30+ seconds and the UI must stay interactive with a
-// live elapsed-time indicator while it's in flight — a Server Action would
-// tie the result to a form submission lifecycle with less control over
-// progress display. The fetch goes to our own /api/verify route handler,
-// which holds the backend key server-side.
+// Claim checker with progressive streaming. The submit consumes the SSE
+// stream from /api/verify/stream via fetch + ReadableStream (EventSource
+// can't POST), rendering each pipeline stage as it completes — the user
+// watches the fact-check assemble instead of staring at a spinner. The
+// non-streaming /api/verify endpoint still exists for the eval script.
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { VerifyResult } from "@/lib/api";
 
 type Phase = "idle" | "loading" | "done" | "error";
+
+interface ProgressState {
+  subClaims: string[];
+  sourceDomains: string[];
+  evidenceCount: number | null;
+  confidence: number | null;
+  retrying: boolean;
+}
+
+const EMPTY_PROGRESS: ProgressState = {
+  subClaims: [],
+  sourceDomains: [],
+  evidenceCount: null,
+  confidence: null,
+  retrying: false,
+};
 
 const VERDICT_STYLES: Record<VerifyResult["verdict"], { label: string; className: string }> = {
   true: { label: "TRUE", className: "verdict-true" },
@@ -19,22 +34,31 @@ const VERDICT_STYLES: Record<VerifyResult["verdict"], { label: string; className
   unverifiable: { label: "UNVERIFIABLE", className: "verdict-unverifiable" },
 };
 
-// Honest, time-based hints about what the pipeline is doing. These are not
-// live signals (that's Phase 4 streaming) — just expectation-setting.
-const LOADING_HINTS: Array<[afterSeconds: number, hint: string]> = [
-  [0, "Breaking the claim into checkable parts…"],
-  [4, "Searching the web for evidence…"],
-  [12, "Reading and embedding sources…"],
-  [20, "Weighing the evidence…"],
-  [30, "Still working — low-confidence verdicts trigger a broader second search…"],
-];
+/** Parse complete SSE frames out of a text buffer; returns [events, remainder]. */
+function parseSse(buffer: string): [Array<{ event: string; data: string }>, string] {
+  const events: Array<{ event: string; data: string }> = [];
+  const parts = buffer.split("\n\n");
+  const remainder = parts.pop() ?? "";
+  for (const part of parts) {
+    let event = "message";
+    let data = "";
+    for (const line of part.split("\n")) {
+      if (line.startsWith("event: ")) event = line.slice(7).trim();
+      else if (line.startsWith("data: ")) data += line.slice(6);
+    }
+    if (data) events.push({ event, data });
+  }
+  return [events, remainder];
+}
 
 export default function Home() {
   const [claim, setClaim] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
+  const [progress, setProgress] = useState<ProgressState>(EMPTY_PROGRESS);
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [error, setError] = useState<string>("");
   const [elapsed, setElapsed] = useState(0);
+  const [feedbackSent, setFeedbackSent] = useState<"up" | "down" | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -57,29 +81,80 @@ export default function Home() {
     event.preventDefault();
     if (phase === "loading" || claim.trim().length < 3) return;
     setPhase("loading");
+    setProgress(EMPTY_PROGRESS);
     setResult(null);
     setError("");
     setElapsed(0);
+    setFeedbackSent(null);
+
     try {
-      const response = await fetch("/api/verify", {
+      const response = await fetch("/api/verify/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: claim.trim() }),
       });
-      const body = (await response.json()) as VerifyResult & { error?: string };
-      if (!response.ok) {
+      if (!response.ok || !response.body) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? `Request failed (${response.status})`);
       }
-      setResult(body);
-      setPhase("done");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let sawResult = false;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const [events, remainder] = parseSse(buffer);
+        buffer = remainder;
+
+        for (const { event: name, data } of events) {
+          const payload = JSON.parse(data) as Record<string, unknown>;
+          if (name === "sub_claims") {
+            setProgress((p) => ({ ...p, subClaims: payload.sub_claims as string[] }));
+          } else if (name === "evidence") {
+            setProgress((p) => ({
+              ...p,
+              sourceDomains: payload.source_domains as string[],
+              retrying: false,
+            }));
+          } else if (name === "retrieved") {
+            setProgress((p) => ({ ...p, evidenceCount: payload.evidence_count as number }));
+          } else if (name === "judging") {
+            setProgress((p) => ({ ...p, confidence: payload.confidence as number }));
+          } else if (name === "retrying") {
+            setProgress((p) => ({ ...p, retrying: true }));
+          } else if (name === "result") {
+            setResult(payload as unknown as VerifyResult);
+            setPhase("done");
+            sawResult = true;
+          } else if (name === "error") {
+            throw new Error((payload.message as string) ?? "Verification failed.");
+          }
+        }
+      }
+      if (!sawResult) throw new Error("The stream ended before a verdict arrived.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setPhase("error");
     }
   }
 
-  const hint =
-    LOADING_HINTS.filter(([after]) => elapsed >= after).at(-1)?.[1] ?? LOADING_HINTS[0][1];
+  async function sendFeedback(helpful: boolean) {
+    if (!result || feedbackSent) return;
+    setFeedbackSent(helpful ? "up" : "down");
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim: result.claim, verdict: result.verdict, helpful }),
+      });
+    } catch {
+      // Feedback is best-effort; never bother the user about it.
+    }
+  }
 
   return (
     <main className="container">
@@ -110,8 +185,46 @@ export default function Home() {
       {phase === "loading" && (
         <div className="card loading" role="status">
           <div className="spinner" aria-hidden="true" />
-          <p className="hint">{hint}</p>
-          <p className="elapsed">{elapsed}s elapsed — a full check usually takes 15-40 seconds.</p>
+          <ul className="progress-list">
+            <li className={progress.subClaims.length ? "step-done" : "step-active"}>
+              {progress.subClaims.length > 1
+                ? `Split into ${progress.subClaims.length} checkable sub-claims`
+                : progress.subClaims.length === 1
+                  ? "Claim is atomic — checking as-is"
+                  : "Breaking the claim into checkable parts…"}
+            </li>
+            <li
+              className={
+                progress.sourceDomains.length
+                  ? "step-done"
+                  : progress.subClaims.length
+                    ? "step-active"
+                    : "step-pending"
+              }
+            >
+              {progress.sourceDomains.length
+                ? `Evidence gathered from ${progress.sourceDomains.slice(0, 4).join(", ")}${progress.sourceDomains.length > 4 ? "…" : ""}`
+                : "Searching the web for evidence…"}
+            </li>
+            <li
+              className={
+                progress.confidence !== null
+                  ? "step-done"
+                  : progress.evidenceCount !== null
+                    ? "step-active"
+                    : "step-pending"
+              }
+            >
+              {progress.retrying
+                ? "Confidence was low — broadening the search and retrying…"
+                : progress.confidence !== null
+                  ? `Verdict formed (${Math.round(progress.confidence * 100)}% confidence)`
+                  : progress.evidenceCount !== null
+                    ? `Weighing ${progress.evidenceCount} evidence passages…`
+                    : "Weighing the evidence…"}
+            </li>
+          </ul>
+          <p className="elapsed">{elapsed}s elapsed</p>
         </div>
       )}
 
@@ -133,6 +246,7 @@ export default function Home() {
               {result.low_confidence && (
                 <em className="low-conf"> — low confidence; evidence may be incomplete</em>
               )}
+              {result.served_from_cache && <em className="cached"> · served from cache</em>}
             </span>
           </div>
 
@@ -165,6 +279,22 @@ export default function Home() {
           ) : (
             <p className="no-sources">No sources were cited for this verdict.</p>
           )}
+
+          <div className="feedback">
+            {feedbackSent ? (
+              <span className="feedback-thanks">Thanks for the feedback!</span>
+            ) : (
+              <>
+                <span>Was this verdict right?</span>
+                <button type="button" className="thumb" onClick={() => sendFeedback(true)}>
+                  👍
+                </button>
+                <button type="button" className="thumb" onClick={() => sendFeedback(false)}>
+                  👎
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

@@ -171,6 +171,76 @@ def test_cache_miss_stores_fresh_verdict(
     assert "served_from_cache" not in stored  # the flag is per-response, not cached
 
 
+def test_stream_endpoint_replays_cache_hit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import truthlayer.cache
+
+    cached_payload = {
+        "claim": "c",
+        "verdict": "true",
+        "confidence": 0.9,
+        "rationale": "cached",
+        "sources": [],
+        "sub_claims": ["c"],
+        "low_confidence": False,
+        "retries": 0,
+    }
+    monkeypatch.setattr(truthlayer.cache, "check_cache", lambda claim: cached_payload)
+
+    response = client.post(
+        "/verify/stream", json={"claim": "the sky is green"}, headers={"X-API-Key": API_KEY}
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: result" in response.text
+    assert '"served_from_cache": true' in response.text
+
+
+def test_stream_endpoint_requires_auth(client: TestClient) -> None:
+    response = client.post("/verify/stream", json={"claim": "the sky is green"})
+    assert response.status_code == 401
+
+
+def test_feedback_stores_row(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    import truthlayer.db
+
+    captured: list[tuple[str, Any]] = []
+
+    class _FakeConn:
+        def execute(self, sql: str, params: Any) -> None:
+            captured.append((sql, params))
+
+    class _FakePool:
+        def connection(self) -> Any:
+            from contextlib import contextmanager
+
+            @contextmanager
+            def cm() -> Any:
+                yield _FakeConn()
+
+            return cm()
+
+    monkeypatch.setattr(truthlayer.db, "get_pool", lambda: _FakePool())
+
+    response = client.post(
+        "/feedback",
+        json={"claim": "the sky is green", "verdict": "false", "helpful": True},
+        headers={"X-API-Key": API_KEY},
+    )
+    assert response.status_code == 204
+    assert captured[0][1] == ("the sky is green", "false", True)
+
+
+def test_feedback_rejects_bad_verdict(client: TestClient) -> None:
+    response = client.post(
+        "/feedback",
+        json={"claim": "abc def", "verdict": "banana", "helpful": True},
+        headers={"X-API-Key": API_KEY},
+    )
+    assert response.status_code == 422
+
+
 def test_openapi_docs_generate(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     assert "/verify" in schema["paths"]

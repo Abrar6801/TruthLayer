@@ -15,6 +15,7 @@ export interface VerifyResult {
   sub_claims: string[];
   low_confidence: boolean;
   retries: number;
+  served_from_cache?: boolean;
 }
 
 export class BackendError extends Error {

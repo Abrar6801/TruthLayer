@@ -24,8 +24,22 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Privacy-respecting analytics (Plausible: no cookies, no PII, page views
+  // and events only). Loads ONLY when the site owner sets
+  // NEXT_PUBLIC_PLAUSIBLE_DOMAIN — the value is just the site's own domain,
+  // which is public by definition, so NEXT_PUBLIC_ is appropriate here.
+  const plausibleDomain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
   return (
     <html lang="en">
+      <head>
+        {plausibleDomain && (
+          <script
+            defer
+            data-domain={plausibleDomain}
+            src="https://plausible.io/js/script.js"
+          />
+        )}
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
       </body>

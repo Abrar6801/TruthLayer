@@ -20,6 +20,7 @@ asyncio.to_thread and the event loop stays free to accept other requests.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 import uuid
@@ -29,7 +30,7 @@ from typing import cast
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -96,6 +97,14 @@ class HealthResponse(BaseModel):
     """Liveness signal."""
 
     status: str = "ok"
+
+
+class FeedbackRequest(BaseModel):
+    """A thumbs-up/down on a verdict — raw material for usage analysis."""
+
+    claim: str = Field(min_length=3, max_length=MAX_CLAIM_LENGTH)
+    verdict: str = Field(pattern="^(true|false|mixed|unverifiable)$")
+    helpful: bool
 
 
 async def _require_api_key(request: Request) -> None:
@@ -195,5 +204,61 @@ def create_app() -> FastAPI:
             response.model_dump(exclude={"served_from_cache"}),
         )
         return response
+
+    @app.post("/verify/stream", dependencies=[Depends(_require_api_key)])
+    @limiter.limit(settings.verify_rate_limit)
+    async def verify_stream(request: Request, body: VerifyRequest) -> StreamingResponse:
+        """SSE variant of /verify: emits progress events as the graph runs.
+
+        Cache hits stream a single result frame immediately; misses stream
+        one frame per completed graph node, then the result.
+        """
+        import truthlayer.cache
+        import truthlayer.streaming
+
+        claim = body.claim.strip()
+        if not claim:
+            raise HTTPException(status_code=422, detail="Claim must not be blank")
+
+        cached = await asyncio.to_thread(truthlayer.cache.check_cache, claim)
+
+        async def event_stream() -> AsyncIterator[str]:
+            if cached is not None:
+                yield truthlayer.streaming._sse("result", {**cached, "served_from_cache": True})
+                return
+            sync_frames = truthlayer.streaming.stream_verification(claim)
+            while True:
+                frame = await asyncio.to_thread(next, sync_frames, None)
+                if frame is None:
+                    break
+                yield frame
+                if frame.startswith("event: result"):
+                    # Cache the fresh verdict for future near-duplicates.
+                    payload = json.loads(frame.split("data: ", 1)[1])
+                    payload.pop("served_from_cache", None)
+                    await asyncio.to_thread(truthlayer.cache.store_verdict, claim, payload)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/feedback", status_code=204, dependencies=[Depends(_require_api_key)])
+    @limiter.limit(settings.verify_rate_limit)
+    async def feedback(request: Request, body: FeedbackRequest) -> Response:
+        """Store a visitor's verdict rating (no PII beyond the claim text)."""
+        from truthlayer.db import get_pool
+
+        def insert() -> None:
+            with get_pool().connection() as conn:
+                conn.execute(
+                    "INSERT INTO verdict_feedback (claim_text, verdict, helpful)"
+                    " VALUES (%s, %s, %s)",
+                    (body.claim.strip(), body.verdict, body.helpful),
+                )
+
+        await asyncio.to_thread(insert)
+        return Response(status_code=204)
 
     return app
