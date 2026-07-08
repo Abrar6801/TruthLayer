@@ -1,0 +1,46 @@
+# Local development stack: the API container plus a local Postgres+pgvector,
+# so day-to-day development never touches production Supabase.
+#
+#   docker compose up --build
+#   curl http://localhost:8000/health
+#
+# The db container auto-applies migrations/*.sql on FIRST boot (empty volume).
+# After schema changes: docker compose down -v && docker compose up --build
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: truthlayer
+      POSTGRES_PASSWORD: truthlayer  # local-only credentials, never reused in prod  # pragma: allowlist secret
+      POSTGRES_DB: truthlayer
+    ports:
+      - "5433:5432" # 5433 on the host to avoid colliding with any local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U truthlayer -d truthlayer"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    # Secrets come from .env at runtime — never baked into the image.
+    env_file: .env
+    environment:
+      # Inside the compose network the db is reachable by service name.
+      DATABASE_URL: postgresql://truthlayer:truthlayer@db:5432/truthlayer # pragma: allowlist secret
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Persist the embedding model download across container restarts.
+      - hf_cache:/home/appuser/.cache/huggingface
+
+volumes:
+  pgdata:
+  hf_cache:

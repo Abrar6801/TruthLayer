@@ -1,0 +1,27 @@
+# Secrets must never enter the build context at all — a COPY . mistake or a
+# leaky layer can't expose what was never sent to the daemon.
+.env
+.env.*
+
+# VCS and local state
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.secrets.baseline
+.pre-commit-config.yaml
+
+# Not needed to run the service
+tests/
+eval/
+frontend/
+migrations/
+*.md
+.github/
+docker-compose.yml
+Dockerfile
+.model_cache/

@@ -26,9 +26,11 @@ def fake_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """
     if not _LIVE:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
-        monkeypatch.setenv("SUPABASE_URL", "https://test-project.supabase.co")
-        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
         monkeypatch.setenv("TAVILY_API_KEY", "test-tavily-key")
+        monkeypatch.setenv(
+            "DATABASE_URL",
+            "postgresql://test:test@localhost:5432/test",  # pragma: allowlist secret
+        )
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

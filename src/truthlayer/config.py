@@ -22,9 +22,8 @@ _VALID_LLM_EFFORTS = get_args(LLMEffort)
 #: Environment variables that must be present and non-empty.
 REQUIRED_VARS = (
     "ANTHROPIC_API_KEY",
-    "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
     "TAVILY_API_KEY",
+    "DATABASE_URL",
 )
 
 
@@ -43,10 +42,11 @@ class Settings:
 
     # --- secrets (required) ---
     anthropic_api_key: str
-    supabase_url: str
-    # service_role bypasses Row Level Security: server-side use ONLY.
-    supabase_service_role_key: str
     tavily_api_key: str
+    # Postgres connection string. Local dev: the docker-compose pgvector
+    # container. Production: Supabase's connection string — a server-side
+    # secret that must never reach client code, logs, or the frontend bundle.
+    database_url: str
 
     # --- embedding model, locked in with the DB schema (Task 1.2) ---
     # Changing the model means changing the vector(384) column and re-embedding
@@ -131,14 +131,11 @@ def get_settings() -> Settings:
             f"LLM_EFFORT={llm_effort!r} is not valid; must be one of {_VALID_LLM_EFFORTS}"
         )
 
-    defaults = Settings(
-        anthropic_api_key="", supabase_url="", supabase_service_role_key="", tavily_api_key=""
-    )
+    defaults = Settings(anthropic_api_key="", tavily_api_key="", database_url="")
     return Settings(
         anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
-        supabase_url=os.environ["SUPABASE_URL"],
-        supabase_service_role_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"],
         tavily_api_key=os.environ["TAVILY_API_KEY"],
+        database_url=os.environ["DATABASE_URL"],
         embedding_model_name=os.environ.get("EMBEDDING_MODEL_NAME", defaults.embedding_model_name),
         embedding_dim=_read_optional_int("EMBEDDING_DIM", defaults.embedding_dim),
         anthropic_model=os.environ.get("ANTHROPIC_MODEL", defaults.anthropic_model),

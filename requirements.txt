@@ -1,11 +1,17 @@
 # Runtime dependencies, pinned. Update deliberately, one at a time.
 anthropic==0.116.0
+fastapi==0.139.0
 httpx==0.28.1
 langchain-text-splitters==1.1.2
+langgraph==1.2.8
 numpy==2.5.1
+pgvector==0.5.0
+psycopg[binary]==3.3.4
+psycopg-pool==3.3.1
 pydantic==2.13.4
 python-dotenv==1.2.2
 sentence-transformers==5.6.0
-supabase==2.31.0
+slowapi==0.1.10
 tenacity==9.1.4
 trafilatura==2.1.0
+uvicorn==0.50.2

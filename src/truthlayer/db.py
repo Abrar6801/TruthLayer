@@ -1,32 +1,32 @@
-"""Supabase database access for evidence chunks.
+"""Postgres/pgvector access for evidence chunks (psycopg3 + connection pool).
 
-All queries go through the Supabase client library / the RPC defined in
-migrations/001_init.sql — application code never interpolates values into SQL
-strings, which matters here because chunk_text is arbitrary scraped web text.
+All queries are parameterized — values travel separately from SQL text, which
+matters here because chunk_text is arbitrary scraped web text. Nothing in this
+module ever interpolates content into a SQL string.
 
-This module authenticates with the service_role key, which bypasses Row Level
-Security. That is acceptable ONLY because this code runs server-side. The
-service_role key must never be used in any client-facing code path (frontend,
-browser bundle, logs, error messages) later in the project — anything
-client-reachable gets the anon key and explicit RLS policies instead.
+The database is addressed by a single DATABASE_URL:
+- local dev / docker-compose: the pgvector Postgres container
+- production: Supabase's Postgres connection string (Settings → Database).
+  That string is a server-side secret with the same standing as the old
+  service_role key — it must never reach client-facing code, logs, or the
+  frontend bundle.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
 
-from supabase import Client, create_client
+from pgvector import Vector
+from pgvector.psycopg import register_vector
+from psycopg import Connection
+from psycopg_pool import ConnectionPool
 
 from truthlayer.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_TABLE = "evidence_chunks"
-_MATCH_RPC = "match_evidence_chunks"
-
-_client: Client | None = None
+_pool: ConnectionPool | None = None
 
 
 @dataclass(frozen=True)
@@ -43,13 +43,25 @@ class RetrievedChunk:
     claim_query: str
 
 
-def get_client() -> Client:
-    """Return a cached Supabase client authenticated with the service_role key."""
-    global _client
-    if _client is None:
+def _configure(conn: Connection) -> None:
+    """Register the pgvector type adapter on every pooled connection."""
+    register_vector(conn)
+
+
+def get_pool() -> ConnectionPool:
+    """Return the shared connection pool, creating it lazily."""
+    global _pool
+    if _pool is None:
         settings = get_settings()
-        _client = create_client(settings.supabase_url, settings.supabase_service_role_key)
-    return _client
+        _pool = ConnectionPool(
+            settings.database_url,
+            min_size=1,
+            max_size=5,
+            configure=_configure,
+            # Fail fast if the DB is unreachable instead of hanging a request.
+            timeout=settings.http_timeout_seconds,
+        )
+    return _pool
 
 
 def insert_chunks(
@@ -80,17 +92,19 @@ def insert_chunks(
     if not chunks:
         return 0
 
-    rows: list[dict[str, Any]] = [
-        {
-            "chunk_text": text,
-            "embedding": embedding,
-            "source_url": url,
-            "claim_query": claim_query,
-        }
+    rows = [
+        (text, Vector(embedding), url, claim_query)
         for text, embedding, url in zip(chunks, embeddings, source_urls, strict=True)
     ]
-    response = get_client().table(_TABLE).insert(rows).execute()
-    inserted = len(response.data or [])
+    with get_pool().connection() as conn, conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO evidence_chunks (chunk_text, embedding, source_url, claim_query)
+            VALUES (%s, %s, %s, %s)
+            """,
+            rows,
+        )
+        inserted = cur.rowcount if cur.rowcount is not None and cur.rowcount > 0 else len(rows)
     logger.info("Inserted %d evidence chunks for claim query %r", inserted, claim_query)
     return inserted
 
@@ -102,37 +116,29 @@ def query_nearest(
 ) -> list[RetrievedChunk]:
     """Return the top_k stored chunks most similar to `query_embedding`.
 
-    Uses the match_evidence_chunks RPC (cosine similarity, higher = closer).
-    Results below `min_similarity` are filtered out server-side.
+    Cosine similarity = 1 - (`<=>` cosine distance); higher means closer.
+    Results below `min_similarity` are filtered out in SQL.
     """
-    response = (
-        get_client()
-        .rpc(
-            _MATCH_RPC,
-            {
-                "query_embedding": query_embedding,
-                "match_count": top_k,
-                "min_similarity": min_similarity,
-            },
+    with get_pool().connection() as conn:
+        result = conn.execute(
+            """
+            SELECT chunk_text,
+                   source_url,
+                   1 - (embedding <=> %(q)s) AS similarity,
+                   claim_query
+            FROM evidence_chunks
+            WHERE 1 - (embedding <=> %(q)s) >= %(min_sim)s
+            ORDER BY embedding <=> %(q)s
+            LIMIT %(k)s
+            """,
+            {"q": Vector(query_embedding), "min_sim": min_similarity, "k": top_k},
+        ).fetchall()
+    return [
+        RetrievedChunk(
+            chunk_text=row[0],
+            source_url=row[1],
+            similarity=float(row[2]),
+            claim_query=row[3],
         )
-        .execute()
-    )
-    raw_rows = response.data or []
-    if not isinstance(raw_rows, list):
-        raise TypeError(f"Unexpected RPC response shape: {type(raw_rows).__name__}")
-    chunks: list[RetrievedChunk] = []
-    for row in raw_rows:
-        if not isinstance(row, dict):
-            continue
-        similarity = row["similarity"]
-        if not isinstance(similarity, int | float):
-            raise TypeError(f"Non-numeric similarity in RPC response: {similarity!r}")
-        chunks.append(
-            RetrievedChunk(
-                chunk_text=str(row["chunk_text"]),
-                source_url=str(row["source_url"]),
-                similarity=float(similarity),
-                claim_query=str(row["claim_query"]),
-            )
-        )
-    return chunks
+        for row in result
+    ]
