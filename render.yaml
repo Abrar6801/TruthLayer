@@ -1,0 +1,30 @@
+# Render Blueprint: deploys the TruthLayer API from the Dockerfile.
+#
+# One-time setup (requires your Render account — can't be scripted):
+#   1. render.com → New → Blueprint → connect the GitHub repo.
+#   2. Render reads this file and creates the service.
+#   3. Fill in the env vars marked sync:false in the dashboard (values come
+#      from your local .env / Supabase dashboard — never commit them).
+#
+# Free-tier note: the service spins down after 15 idle minutes; the first
+# request after that takes ~1 min (cold start + model load).
+
+services:
+  - type: web
+    name: truthlayer-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # set in dashboard
+      - key: TAVILY_API_KEY
+        sync: false # set in dashboard
+      - key: DATABASE_URL
+        sync: false # Supabase → Connect → Session pooler URI (IPv4-compatible)
+      - key: TRUTHLAYER_API_KEY
+        generateValue: true # Render generates a strong random key; copy it to Vercel
+      - key: ALLOWED_ORIGINS
+        value: https://REPLACE-WITH-YOUR-APP.vercel.app
+      - key: VERIFY_RATE_LIMIT
+        value: 10/minute

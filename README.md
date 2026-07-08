@@ -1,81 +1,119 @@
 # TruthLayer
 
-An agentic RAG fact-checker. Given a claim, TruthLayer searches the web for
-evidence, retrieves the most relevant chunks with pgvector similarity search,
-and asks Claude for a structured verdict — **true / false / mixed /
-unverifiable** — with citations back to sources.
+**An agentic RAG fact-checker.** Paste a claim; TruthLayer decomposes it into
+checkable sub-claims, searches the web for evidence, retrieves the most
+relevant passages with vector search, and has Claude render a verdict —
+**true / false / mixed / unverifiable** — with citations, a confidence score,
+and an automatic broadened-search retry when confidence is low.
 
-Currently at **Phase 1**: a linear pipeline (search → fetch → chunk → embed →
-retrieve → judge) with no orchestration framework yet.
+Built solo as a learning project for the agentic-RAG stack (LangGraph,
+pgvector, FastAPI, Next.js, LangSmith), with the explicit goal of being able
+to defend every design decision in an interview — see
+[LEARNING_NOTES.md](LEARNING_NOTES.md) for the running per-task log of
+concepts, decisions, and tradeoffs.
 
-## Setup
+## Architecture
 
-Requires Python 3.11+ and a Supabase project (free tier is fine).
+```
+Browser ── Next.js (Vercel) ── /api/verify route handler   [visitor rate limit,
+   │                                │                        holds service key]
+   │                                ▼
+   │                        FastAPI /verify (Render, Docker)  [API-key auth,
+   │                                │                          rate limit, CORS]
+   │                                ▼
+   │                        LangGraph state machine
+   │        ┌──────────────────────────────────────────────┐
+   │        │ decompose ─▶ search_and_embed ─▶ retrieve ─▶ judge
+   │        │     ▲            (per sub-claim,      │        │
+   │        │     │             URL-deduped)        │   low confidence?
+   │        │     └──────────── broaden ◀───────────┼────────┘
+   │        │                   (max 2 retries,     │
+   │        │                    LLM call budget)   ▼
+   │        └──────────────────────────────── verdict + citations
+   │
+   └── every stage: Tavily search · trafilatura extraction · MiniLM local
+       embeddings · Postgres+pgvector (HNSW, cosine) · Claude judge with
+       injection-hardened prompts and strict JSON output
+```
+
+## Tech stack — and why each piece
+
+| Piece | Choice | Why |
+|---|---|---|
+| Orchestration | LangGraph | The confidence-gated retry loop is a declared, testable graph edge instead of a hand-rolled while-loop; typed shared state; per-node tracing |
+| Vector store | Postgres + pgvector | One database for everything; HNSW index stays accurate under continuous inserts (vs IVFFlat's build-time clustering) |
+| Embeddings | sentence-transformers MiniLM-L6 (local) | Free, offline, no rate limits for dev; swap point is one function |
+| Judge LLM | Claude (Sonnet) | Strong grounded-judgment behavior; strict JSON + Pydantic validation gives a hard parse-or-fail boundary |
+| API | FastAPI | Async endpoint keeps the event loop free during 10-30s I/O waits; typed request/response models; free OpenAPI docs |
+| Frontend | Next.js 14 App Router | Server-side route handler keeps the service key out of the browser bundle; Vercel free tier |
+| Evals/tracing | LangSmith + custom harness | Per-node traces for debugging the retry loop; the eval harness measures accuracy, latency, and cost per verdict |
+
+## Results
+
+Measured on a 40-claim hand-labeled eval set (13 true / 13 false / 7 mixed /
+7 unverifiable, mixed difficulty):
+
+> Baseline and improvement reports live in [`eval/`](eval/) —
+> `baseline_report.md`, `reranking_report.md`, `latency_report.md`. The
+> final numbers are summarized here as Phase 4 lands.
+
+## Security posture
+
+- Prompt injection is the core threat for a system that ingests arbitrary web
+  text: scraped content is tagged untrusted at the type level, XML-delimited
+  in every prompt, the judge is instructed to treat it as data, output must
+  validate against a strict schema, and cited URLs are filtered against the
+  actual evidence set. An adversarial-chunk test exercises this end to end.
+- Secrets: env-vars only, single config module, `.env` gitignored from the
+  first commit, detect-secrets pre-commit hook, no secrets in Docker layers
+  (verified via `docker history`).
+- The API refuses to boot without its own auth key; rate limiting exists at
+  both the visitor layer (Next.js, per-IP) and the service layer (FastAPI).
+- All SQL is parameterized; the DB is addressed by a server-side connection
+  string; RLS is enabled default-deny on every table.
+- Containers run as a non-root user; `.dockerignore` keeps `.env`, `.git`,
+  and tests out of the build context.
+
+## Known limitations (honest list)
+
+- **Evidence quality ceiling:** verdicts are only as good as the top search
+  results; SEO spam or thin coverage produces "unverifiable" (by design) but
+  sometimes confidently-wrong evidence slips through.
+- **The eval set is 40 claims** — big enough to catch regressions, far too
+  small for statistically tight accuracy claims. Treat every number as ±.
+- **Confidence is self-reported** by the judge, not calibrated probability.
+- **English-only**, and claims about very recent events depend entirely on
+  what Tavily surfaces.
+- **Free-tier latency:** cold starts add ~1 min on Render after idle.
+- With more time: calibrated confidence, multilingual support, a claim-type
+  classifier in front of the pipeline, and a larger stratified eval set.
+
+## Run it locally
 
 ```bash
-# 1. Create and activate a virtual environment
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
+# Backend (needs Docker Desktop)
+cp .env.example .env             # fill in ANTHROPIC_API_KEY, TAVILY_API_KEY;
+                                 # keep the compose DATABASE_URL as-is
+docker compose up --build        # API on :8000 + local pgvector Postgres
+curl http://localhost:8000/health
 
-# 2. Install dependencies (pinned) and the package itself
-pip install -r requirements.txt -r requirements-dev.txt
-pip install -e .
+# Frontend
+cd frontend
+cp .env.local.example .env.local # point at http://localhost:8000 + same service key
+npm install && npm run dev       # UI on :3000
 
-# 3. Configure secrets
-copy .env.example .env        # then fill in real values — .env is gitignored
-# Keys needed: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TAVILY_API_KEY
-
-# 4. Apply the database migration
-# Open the Supabase dashboard → SQL Editor → paste and run migrations/001_init.sql
-
-# 5. Install the git hooks (formatting, linting, secrets scanning)
-pre-commit install
+# Tests / eval (Python 3.11+, venv)
+pip install -r requirements.txt -r requirements-dev.txt && pip install -e .
+pytest                           # fully mocked, no keys needed
+python eval/run_eval.py --tag mytest --limit 5   # real run (spends API credits)
+python eval/score_eval.py eval/results/<file>.json
 ```
 
-## Usage
+Deployment (Render + Vercel + Supabase): see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-```bash
-python -m truthlayer "The Great Wall of China is visible from space with the naked eye"
-```
+## Learning log
 
-The pipeline logs each stage (searching, fetching, embedding, retrieving,
-judging) and prints the verdict, confidence, rationale, and supporting source
-URLs. If no relevant evidence is found it reports *insufficient evidence*
-rather than guessing.
-
-## Development
-
-```bash
-pytest              # tests are fully mocked; no API keys or network needed
-ruff check .        # lint
-black .             # format
-mypy                # type-check
-```
-
-## Project layout
-
-```
-src/truthlayer/
-  config.py      # all env var access lives here, nowhere else
-  db.py          # Supabase client wrapper (insert chunks, nearest-neighbor query)
-  search.py      # Tavily web search + page fetching + HTML→text extraction
-  chunking.py    # recursive text splitting
-  embedding.py   # local sentence-transformers embeddings (batched)
-  ingest.py      # search results → chunks → embeddings → database
-  retrieval.py   # claim → top-k relevant chunks with similarity threshold
-  verdict.py     # Claude judge: structured, cited, injection-resistant verdict
-  cli.py         # end-to-end command-line entry point
-migrations/      # SQL migrations for Supabase (run manually in SQL Editor)
-tests/           # pytest suite, all external calls mocked
-```
-
-## Security notes
-
-- `.env` is gitignored from the first commit; `pre-commit` runs
-  `detect-secrets` on every commit.
-- The Supabase `service_role` key is **server-side only** — it bypasses Row
-  Level Security and must never reach client-facing code or logs.
-- All text scraped from the web is treated as **untrusted data**: it is tagged
-  `untrusted_web` at ingestion, delimited inside XML tags in the judge prompt,
-  and Claude is explicitly instructed to ignore any instructions embedded in it.
+Every task appended a dated entry to
+[LEARNING_NOTES.md](LEARNING_NOTES.md): what was built, the concepts
+involved (explained from scratch), and the design tradeoffs. That file is
+the honest record of the learning process this project exists for.
