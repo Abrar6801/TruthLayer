@@ -1,5 +1,45 @@
 # TruthLayer learning notes
 
+## 2026-07-08 — Tasks 3.4 + 3.5: Next.js frontend and secure integration
+
+**What was built:** a Next.js 14 (App Router) frontend in `frontend/` — one
+page with a claim textarea, a staged loading state (elapsed timer + honest
+"what's happening now" hints, since a check takes 15-40s), an error state,
+and a result card (verdict badge, confidence, rationale, sub-claims,
+clickable sources, low-confidence warning, demo disclaimer). Integration
+pieces: a typed server-only API client (`lib/api.ts`), a `/api/verify` route
+handler that proxies to FastAPI, and a per-IP in-memory rate limiter
+(`lib/rateLimit.ts`) at the Next layer.
+
+**Key concepts:**
+- **NEXT_PUBLIC_ vs server-only env vars — the difference is WHERE the value
+  lives:** `NEXT_PUBLIC_*` values are string-substituted into the JavaScript
+  bundle at build time; anyone can read them with view-source. Server-only
+  vars exist only in the server process. The backend key is server-only, the
+  browser calls our own same-origin `/api/verify`, and the key is attached
+  server-side. Verified by grepping the built `.next/static/` bundle: neither
+  the key value nor even the env var name appears.
+- **Why rate limiting must exist at BOTH layers:** deployed, all browser
+  traffic funnels through the Next server, so FastAPI sees exactly one client
+  IP (the Next server's). Its limiter throttles the server as a whole but
+  can't tell one abusive visitor from a hundred honest ones — only the Next
+  layer still sees real visitor IPs. FastAPI's limiter remains as defense in
+  depth for anyone hitting the API directly.
+- **Client-side fetch over Server Actions:** a 10-30s request needs a live
+  elapsed indicator and stateful progress UI; a client fetch gives full
+  control of in-flight state. Server Actions shine for mutations, not
+  long-running reads.
+- **Perceived latency design:** the staged hints don't make anything faster,
+  but "Searching the web… 12s elapsed, checks take 15-40s" converts a frozen
+  spinner into a progress narrative — the Phase 4 streaming work replaces
+  these timed hints with real pipeline events.
+
+**Decisions & tradeoffs:** in-memory rate limiting is per-instance (fine for
+a single free-tier deployment; a shared Redis/Upstash store is the fix if it
+ever scales out). The Next build's static-generation covers only the page
+shell; the verdict flow is fully dynamic.
+
+
 ## 2026-07-08 — Task 2.7: Dockerization (and the psycopg refactor it forced)
 
 **What was built:** a multi-stage `Dockerfile` (builder venv → slim runtime,
