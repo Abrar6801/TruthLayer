@@ -67,6 +67,13 @@ def score(results: list[dict[str, Any]]) -> dict[str, Any]:
         if _domain(ref) in cited_domains:
             retrieval_hits += 1
 
+    # Per-stage latency: average seconds spent in each graph node per claim.
+    stage_totals: dict[str, list[float]] = {}
+    for r in results:
+        for stage, seconds in (r.get("stage_seconds") or {}).items():
+            stage_totals.setdefault(stage, []).append(seconds)
+    stage_avgs = {stage: statistics.mean(vals) for stage, vals in sorted(stage_totals.items())}
+
     latencies = [r["latency_seconds"] for r in results if r.get("latency_seconds")]
     llm_calls = [r["llm_calls"] for r in results if r.get("llm_calls") is not None]
     in_tokens = [r["input_tokens"] for r in results if r.get("input_tokens") is not None]
@@ -110,6 +117,7 @@ def score(results: list[dict[str, Any]]) -> dict[str, Any]:
         "retrieval_checked": retrieval_total,
         "latency_p50": pctile(latencies, 0.50),
         "latency_p95": pctile(latencies, 0.95),
+        "stage_avg_seconds": stage_avgs,
         "avg_llm_calls": statistics.mean(llm_calls) if llm_calls else None,
         "avg_input_tokens": statistics.mean(in_tokens) if in_tokens else None,
         "avg_output_tokens": statistics.mean(out_tokens) if out_tokens else None,
@@ -199,6 +207,15 @@ def render_report(metrics: dict[str, Any], run_meta: dict[str, Any]) -> str:
         f = metrics["faithfulness"]
         lines.append(f"- Faithfulness (LLM-as-judge, sample of {f['sampled']}): {f['rate']:.0%}")
     lines.append("")
+    if metrics.get("stage_avg_seconds"):
+        lines.append("")
+        lines.append("## Per-stage latency (avg seconds per claim)")
+        lines.append("")
+        lines.append("| stage | avg s |")
+        lines.append("|---|---|")
+        for stage, avg in metrics["stage_avg_seconds"].items():
+            lines.append(f"| {stage} | {avg:.2f} |")
+    lines.append("")
     lines.append("## Confusion matrix (rows = expected, columns = predicted)")
     lines.append("")
     header = "| expected \\ predicted | " + " | ".join(VERDICTS) + " |"
@@ -232,6 +249,11 @@ def render_report(metrics: dict[str, Any], run_meta: dict[str, Any]) -> str:
 
 
 def main() -> int:
+    # Windows consoles default to cp1252, which can't print the report's
+    # arrows/dots; the report file itself is always written as UTF-8.
+    if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+
     parser = argparse.ArgumentParser(description="Score a TruthLayer eval run.")
     parser.add_argument("results_file", help="A file produced by run_eval.py")
     parser.add_argument("--report", default=None, help="Where to write the markdown report")
