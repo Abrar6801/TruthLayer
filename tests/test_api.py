@@ -43,9 +43,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     # create_app builds a fresh limiter per app, so limit state can't leak
     # across tests.
+    import truthlayer.cache
     from truthlayer.api import create_app
 
     monkeypatch.setattr(truthlayer.graph, "verify_claim", lambda claim: _state(claim=claim))
+    # Default: cache misses and writes are no-ops (no real model/DB in tests).
+    monkeypatch.setattr(truthlayer.cache, "check_cache", lambda claim: None)
+    monkeypatch.setattr(truthlayer.cache, "store_verdict", lambda claim, payload: None)
     with TestClient(create_app(), raise_server_exceptions=False) as test_client:
         yield test_client
     get_settings.cache_clear()
@@ -115,6 +119,56 @@ def test_errors_do_not_leak_internals(client: TestClient, monkeypatch: pytest.Mo
     assert "RuntimeError" not in text
     assert "Traceback" not in text
     assert "Internal server error" in text
+
+
+def test_cache_hit_short_circuits_pipeline(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import truthlayer.cache
+
+    cached_payload = {
+        "claim": "the sky is green",
+        "verdict": "false",
+        "confidence": 0.95,
+        "rationale": "cached rationale",
+        "sources": ["https://cached.example"],
+        "sub_claims": ["the sky is green"],
+        "low_confidence": False,
+        "retries": 0,
+    }
+    monkeypatch.setattr(truthlayer.cache, "check_cache", lambda claim: cached_payload)
+
+    def pipeline_must_not_run(claim: str) -> Any:
+        raise AssertionError("pipeline ran despite a cache hit")
+
+    monkeypatch.setattr(truthlayer.graph, "verify_claim", pipeline_must_not_run)
+
+    response = client.post(
+        "/verify", json={"claim": "the sky is green"}, headers={"X-API-Key": API_KEY}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["served_from_cache"] is True
+    assert body["rationale"] == "cached rationale"
+
+
+def test_cache_miss_stores_fresh_verdict(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import truthlayer.cache
+
+    stored: dict[str, Any] = {}
+    monkeypatch.setattr(
+        truthlayer.cache, "store_verdict", lambda claim, payload: stored.update(payload)
+    )
+
+    response = client.post(
+        "/verify", json={"claim": "the sky is green"}, headers={"X-API-Key": API_KEY}
+    )
+    assert response.status_code == 200
+    assert response.json()["served_from_cache"] is False
+    assert stored["verdict"] == "false"
+    assert "served_from_cache" not in stored  # the flag is per-response, not cached
 
 
 def test_openapi_docs_generate(client: TestClient) -> None:

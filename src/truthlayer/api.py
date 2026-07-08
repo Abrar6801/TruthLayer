@@ -85,6 +85,11 @@ class VerifyResponse(BaseModel):
         "after exhausting retries — evidence may be incomplete."
     )
     retries: int
+    served_from_cache: bool = Field(
+        default=False,
+        description="True when a semantically near-identical claim was verified "
+        "recently and this verdict was served from the cache.",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -153,11 +158,18 @@ def create_app() -> FastAPI:
     async def verify(request: Request, body: VerifyRequest) -> VerifyResponse:
         # Import here so the app can boot (and /health respond) without the
         # heavyweight graph/model imports.
+        import truthlayer.cache
         import truthlayer.graph
 
         claim = body.claim.strip()
         if not claim:
             raise HTTPException(status_code=422, detail="Claim must not be blank")
+
+        # Semantic cache sits BEHIND validation (a cached claim is still user
+        # input on the way in) and in front of the expensive pipeline.
+        cached = await asyncio.to_thread(truthlayer.cache.check_cache, claim)
+        if cached is not None:
+            return VerifyResponse(**{**cached, "served_from_cache": True})
 
         # The graph is sync (httpx sync + local embedding model); run it on a
         # worker thread so this endpoint doesn't block the event loop.
@@ -167,7 +179,7 @@ def create_app() -> FastAPI:
             logger.error("Graph produced no verdict; errors: %s", state.get("errors"))
             raise HTTPException(status_code=502, detail="Verification pipeline failed")
 
-        return VerifyResponse(
+        response = VerifyResponse(
             claim=claim,
             verdict=verdict.verdict,
             confidence=verdict.confidence,
@@ -177,5 +189,11 @@ def create_app() -> FastAPI:
             low_confidence=state.get("low_confidence", False),
             retries=state.get("retry_count", 0),
         )
+        await asyncio.to_thread(
+            truthlayer.cache.store_verdict,
+            claim,
+            response.model_dump(exclude={"served_from_cache"}),
+        )
+        return response
 
     return app

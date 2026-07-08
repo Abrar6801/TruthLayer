@@ -1,5 +1,41 @@
 # TruthLayer learning notes
 
+## 2026-07-08 — Task 4.4: semantic caching (STRONG GENERAL INTERVIEW TOPIC)
+
+**What was built:** `migrations/002_verified_claims.sql` (claim text +
+embedding + verdict payload, HNSW index, RLS default-deny),
+`src/truthlayer/cache.py` (similarity-gated lookup with TTL, non-fatal
+writes), wired into /verify behind input validation with a
+`served_from_cache` response flag.
+
+**Measured:** cache hit ≈ **15ms** vs full-pipeline p50 of **14.9s** (~1000×),
+and each hit saves ≈ **$0.0092** of LLM spend plus 1-4 Tavily searches.
+
+**Key concepts (this pattern generalizes to any high-volume LLM product):**
+- **Semantic vs exact-match caching:** exact-match keys on bytes, so natural
+  language never repeats exactly and the hit rate rounds to zero. Semantic
+  caching keys on the *embedding* — any claim within a cosine threshold of a
+  stored one reuses its verdict. One embedding call replaces the whole
+  pipeline on a hit.
+- **Why negations break naive embedding similarity:** "the earth is round"
+  vs "the earth is flat" share topic, structure, and almost all tokens; the
+  single word that inverts the meaning barely moves the vector. Measured
+  with our actual model: negation/entity-swap pairs score 0.77-0.86, tight
+  paraphrases 0.98+. The 0.97 threshold sits in that gap — and
+  tests/test_cache.py probes exactly those pairs with the real model so a
+  model swap that shifts the geometry fails CI instead of silently serving
+  wrong verdicts.
+- **TTL as cache invalidation:** facts drift ("the current champion is X").
+  7-day TTL bounds staleness; an expired entry just re-runs the pipeline.
+  Tradeoff documented in config.py.
+- **Idempotency note:** repeat requests during the TTL window return the
+  identical payload — good for consistency, and it makes the demo resilient
+  to someone hammering the same viral claim.
+- **Placement matters:** the cache sits *behind* input validation (a cached
+  claim is still user input) and *in front of* the expensive pipeline; cache
+  writes are non-fatal so a broken cache can't fail a good verdict.
+
+
 ## 2026-07-08 — Tasks 3.4 + 3.5: Next.js frontend and secure integration
 
 **What was built:** a Next.js 14 (App Router) frontend in `frontend/` — one

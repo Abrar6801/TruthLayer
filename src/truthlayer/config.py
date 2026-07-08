@@ -95,6 +95,17 @@ class Settings:
     # decomposition can't fire unbounded Tavily calls into free-tier limits.
     search_concurrency: int = 3
 
+    # --- semantic cache (Phase 4.4) ---
+    cache_enabled: bool = True
+    # 0.97 cosine: high enough that paraphrases hit but negations and entity
+    # swaps miss — the catastrophic failure for a fact-checker is serving
+    # "the earth is round"'s verdict for "the earth is flat". Validated by
+    # tests/test_cache.py's near-miss probes with the real embedding model.
+    cache_similarity_threshold: float = 0.97
+    # Facts drift (officeholders, records, prices). 7 days keeps demo-scale
+    # repeat traffic cheap while bounding how stale a served verdict can be.
+    cache_ttl_hours: int = 168
+
     # --- network hygiene ---
     http_timeout_seconds: float = 15.0
     http_max_retries: int = 3
@@ -176,6 +187,11 @@ def get_settings() -> Settings:
             "RETRIEVAL_CANDIDATES", defaults.retrieval_candidates
         ),
         search_concurrency=_read_optional_int("SEARCH_CONCURRENCY", defaults.search_concurrency),
+        cache_enabled=os.environ.get("CACHE_ENABLED", "true").lower() in ("1", "true", "yes"),
+        cache_similarity_threshold=_read_optional_float(
+            "CACHE_SIMILARITY_THRESHOLD", defaults.cache_similarity_threshold
+        ),
+        cache_ttl_hours=_read_optional_int("CACHE_TTL_HOURS", defaults.cache_ttl_hours),
         http_timeout_seconds=_read_optional_float(
             "HTTP_TIMEOUT_SECONDS", defaults.http_timeout_seconds
         ),
