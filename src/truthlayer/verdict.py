@@ -153,7 +153,7 @@ def generate_verdict(
         message = client.messages.create(
             model=settings.anthropic_model,
             max_tokens=1024,
-            temperature=settings.llm_temperature,
+            output_config={"effort": settings.llm_effort},
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )

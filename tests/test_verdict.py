@@ -144,7 +144,8 @@ def test_generate_verdict_happy_path() -> None:
     verdict = generate_verdict("claim", [_chunk("evidence")], client=client)  # type: ignore[arg-type]
     assert isinstance(verdict, Verdict)
     call = client.messages.calls[0]
-    assert call["temperature"] == 0.0  # repeatability over creativity
+    assert "temperature" not in call  # Sonnet 5 400s on any sampling param
+    assert call["output_config"] == {"effort": "low"}
 
 
 def test_generate_verdict_filters_uncited_sources() -> None:

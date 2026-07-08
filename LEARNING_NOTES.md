@@ -1,5 +1,44 @@
 # TruthLayer learning notes
 
+## 2026-07-07 — Fix: `temperature` removed on Claude Sonnet 5
+
+**What happened:** the first live run against a funded API key failed with
+`Error code: 400 - 'temperature is deprecated for this model'`. Claude Sonnet
+5 (and the whole "4.7+" generation: Opus 4.7/4.8, Fable 5) dropped sampling
+parameters — `temperature`, `top_p`, `top_k` — entirely. Sending any of them
+is a 400, not a soft warning, so the CLAUDE.md guidance to "use a low
+temperature (0-0.2) on the judge" no longer has a knob to turn.
+
+**What changed:**
+- `src/truthlayer/config.py`: `llm_temperature: float` replaced with
+  `llm_effort: LLMEffort` (a `Literal["low","medium","high","xhigh","max"]`),
+  validated against the allowed set at startup so a bad `LLM_EFFORT` env var
+  fails fast like every other config error.
+- `src/truthlayer/verdict.py`: the `messages.create()` call no longer passes
+  `temperature=...`; it passes `output_config={"effort": settings.llm_effort}`
+  instead, defaulting to `"low"`.
+- `tests/test_verdict.py`: asserts `"temperature" not in call` and checks the
+  new `output_config` payload instead of the old temperature value.
+
+**Key concept — effort vs. temperature (these solve different problems):**
+`temperature` controlled *sampling randomness* — same prompt, different roll
+of the dice each time. `output_config.effort` controls *how much the model
+thinks* before answering (low/medium/high/xhigh/max) — it's a
+quality/latency/cost dial, not a determinism dial. Newer Claude models never
+guaranteed identical output at temperature=0 either; the actual source of
+repeatability in this pipeline is the strict JSON schema + Pydantic
+validation in `verdict.py`, which was already doing the real work — the
+`temperature=0.0` was mostly a no-op with these models even before it started
+erroring outright.
+
+**Design decision:** `llm_effort` defaults to `"low"` — this is a
+classification-shaped task (pick one of four literals, don't write an essay),
+so the cheapest effort level that still reasons enough to weigh evidence
+correctly is the right default. Bump to `"medium"`/`"high"` via the
+`LLM_EFFORT` env var if verdicts on ambiguous claims look under-reasoned.
+
+
+
 Running log of what was built, the concepts behind it, and the decisions made
 — one entry per task. Newest entries at the bottom.
 

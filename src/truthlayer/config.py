@@ -11,8 +11,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Literal, get_args
 
 from dotenv import load_dotenv
+
+#: Valid output_config.effort values accepted by the Claude API.
+LLMEffort = Literal["low", "medium", "high", "xhigh", "max"]
+_VALID_LLM_EFFORTS = get_args(LLMEffort)
 
 #: Environment variables that must be present and non-empty.
 REQUIRED_VARS = (
@@ -51,8 +56,11 @@ class Settings:
 
     # --- LLM ---
     anthropic_model: str = "claude-sonnet-5"
-    # Fact-checking wants repeatable output, not creative variation.
-    llm_temperature: float = 0.0
+    # Claude Sonnet 5 (and the rest of the 4.7+/Fable-5 generation) removed
+    # sampling parameters (temperature/top_p/top_k) entirely — sending one is a
+    # 400, not a no-op. Repeatable judge output now comes from the strict JSON
+    # schema (verdict.py) plus low effort, not from a temperature knob.
+    llm_effort: LLMEffort = "low"
     # Hard ceiling on Claude calls a single claim can trigger (judge + parse retry).
     max_llm_calls_per_claim: int = 2
 
@@ -98,6 +106,12 @@ def get_settings() -> Settings:
             + ". Copy .env.example to .env and fill in real values."
         )
 
+    llm_effort = os.environ.get("LLM_EFFORT", "low")
+    if llm_effort not in _VALID_LLM_EFFORTS:
+        raise ConfigError(
+            f"LLM_EFFORT={llm_effort!r} is not valid; must be one of {_VALID_LLM_EFFORTS}"
+        )
+
     defaults = Settings(
         anthropic_api_key="", supabase_url="", supabase_service_role_key="", tavily_api_key=""
     )
@@ -109,7 +123,7 @@ def get_settings() -> Settings:
         embedding_model_name=os.environ.get("EMBEDDING_MODEL_NAME", defaults.embedding_model_name),
         embedding_dim=_read_optional_int("EMBEDDING_DIM", defaults.embedding_dim),
         anthropic_model=os.environ.get("ANTHROPIC_MODEL", defaults.anthropic_model),
-        llm_temperature=_read_optional_float("LLM_TEMPERATURE", defaults.llm_temperature),
+        llm_effort=llm_effort,  # type: ignore[arg-type]  # validated against _VALID_LLM_EFFORTS above
         max_llm_calls_per_claim=_read_optional_int(
             "MAX_LLM_CALLS_PER_CLAIM", defaults.max_llm_calls_per_claim
         ),
