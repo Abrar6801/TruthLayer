@@ -1,5 +1,43 @@
 # TruthLayer learning notes
 
+## 2026-07-08 — Tasks 4.1–4.3: baseline, reranking (negative result), parallelization
+
+**Baseline (4.1), frozen before any optimization:** 77.5% accuracy on the
+40-claim set (perfect 26/26 on true/false; mixed 2/7, unverifiable 3/7 —
+both bleed into "false"), p50 14.9s / p95 25.1s, 2.02 LLM calls and $0.0092
+per verdict, faithfulness 8/8. Freezing first matters because after an
+optimization lands, the un-optimized system no longer exists to measure —
+any later "before" number would be a reconstruction. p50 tells you the
+typical experience; p95 tells you what the unlucky user gets — here the tail
+was compound claims running 3-4 sequential searches, which is a different
+engineering problem than the median.
+
+**Reranking (4.2) — a well-understood negative result:** adding a
+cross-encoder over pgvector's top-20 moved accuracy 77.5% → 75.0% and cost
++1.15s. Chunk-level diff showed why: on "Everest, located in Japan, is the
+tallest mountain", the reranker promoted text about *Japanese Everest
+expeditions* (maximum lexical overlap, zero evidential value) over
+Wikipedia's Everest page, flipping a correct MIXED to FALSE. Root cause:
+cross-encoders score relevance-to-text, not usefulness-for-judgment, and
+our per-claim evidence stores are already small and search-engine-filtered,
+so there was little pollution for reranking to clean up. Bi- vs
+cross-encoder mechanics are in reranker.py's docstring; decision: flag stays
+off by default. Full analysis: eval/reranking_report.md.
+
+**Parallelization (4.3):** sub-claim search cycles now overlap on a bounded
+3-worker thread pool: p50 −30%, p95 −39%, and the targeted stage
+(search_and_embed) −57%. Threads over asyncio because the stack underneath
+(sync httpx, local embedding model) is synchronous — asyncio would have been
+the same thread pool wearing a costume. The pool bound is the semaphore:
+without it, a 4-sub-claim decomposition fires unbounded simultaneous calls
+into free-tier rate limits. Embedding/storage deliberately stayed
+sequential (model thread-safety + one big batch beats N small ones).
+Accuracy delta between runs was fully accounted for by the reranker's chunk
+change, not concurrency — the check that matters, because accuracy moving
+under concurrency means a shared-state bug. Full report:
+eval/latency_report.md.
+
+
 ## 2026-07-08 — Task 4.4: semantic caching (STRONG GENERAL INTERVIEW TOPIC)
 
 **What was built:** `migrations/002_verified_claims.sql` (claim text +

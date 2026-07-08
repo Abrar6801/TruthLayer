@@ -1,0 +1,1272 @@
+{
+  "run_tag": "rerank_parallel",
+  "timestamp": "20260708T183028Z",
+  "results": [
+    {
+      "id": 1,
+      "claim": "Water boils at 100 degrees Celsius at sea level.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Boiling_point",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.95,
+      "rationale": "Multiple evidence sources confirm that water boils at 100\u00b0C at sea level, consistent with standard atmospheric pressure boiling point.",
+      "sources": [
+        "https://homework.study.com/explanation/water-boils-at-100-degrees-celsius-at-sea-level-if-water-does-not-boil-at-100-degrees-celsius-what-could-be-the-reason.html",
+        "https://brainly.in/question/41180913",
+        "https://www.facebook.com/groups/159739892896893/posts/906251704912371"
+      ],
+      "sub_claims": [
+        "Water boils at 100 degrees Celsius at sea level."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 21.27,
+      "stage_seconds": {
+        "decompose": 3.14,
+        "search_and_embed": 4.69,
+        "retrieve": 9.83,
+        "judge": 3.62,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2596,
+      "output_tokens": 236
+    },
+    {
+      "id": 2,
+      "claim": "The Eiffel Tower is located in Paris, France.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.99,
+      "rationale": "Evidence confirms the Eiffel Tower is located in the 7th arrondissement of Paris, France.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Eiffel_Tower"
+      ],
+      "sub_claims": [
+        "The Eiffel Tower is located in Paris, France."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.98,
+      "stage_seconds": {
+        "decompose": 1.45,
+        "search_and_embed": 3.31,
+        "retrieve": 0.9,
+        "judge": 3.32,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3244,
+      "output_tokens": 133
+    },
+    {
+      "id": 3,
+      "claim": "Mount Everest is the tallest mountain on Earth above sea level.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Mount_Everest",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.97,
+      "rationale": "Wikipedia evidence confirms Mount Everest has an elevation of 8,848.86 m and is ranked 1st among the highest mountains on Earth, and comparison data shows other notable peaks (e.g., Kilimanjaro at 5,895m) are shorter.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Mount_Everest"
+      ],
+      "sub_claims": [
+        "Mount Everest is the tallest mountain on Earth above sea level."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.25,
+      "stage_seconds": {
+        "decompose": 1.3,
+        "search_and_embed": 3.05,
+        "retrieve": 1.63,
+        "judge": 2.27,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3285,
+      "output_tokens": 191
+    },
+    {
+      "id": 4,
+      "claim": "The human heart has four chambers.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Heart",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.99,
+      "rationale": "Multiple medical sources confirm the human heart has four chambers: two atria and two ventricles.",
+      "sources": [
+        "https://pediatriccardiology.wustl.edu/clinical-care/for-parents/about-the-heart",
+        "https://en.wikiversity.org/wiki/Human_heart",
+        "https://myhealth.alberta.ca/Health/pages/conditions.aspx?hwid=tp10241",
+        "https://medlineplus.gov/ency/imagepages/19612.htm"
+      ],
+      "sub_claims": [
+        "The human heart has four chambers."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 11.49,
+      "stage_seconds": {
+        "decompose": 4.96,
+        "search_and_embed": 3.13,
+        "retrieve": 0.86,
+        "judge": 2.54,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3519,
+      "output_tokens": 218
+    },
+    {
+      "id": 5,
+      "claim": "Australia is both a country and a continent.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Australia",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.95,
+      "rationale": "The evidence confirms Australia refers both to a continent (smallest of the traditional continents) and to a country that occupies most of that continent, distinguishing between the two uses of the name.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Australia_(continent)"
+      ],
+      "sub_claims": [
+        "Australia is a country.",
+        "Australia is a continent."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 11.64,
+      "stage_seconds": {
+        "decompose": 1.39,
+        "search_and_embed": 5.7,
+        "retrieve": 1.12,
+        "judge": 3.43,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2518,
+      "output_tokens": 153
+    },
+    {
+      "id": 6,
+      "claim": "Amazon was founded by Jeff Bezos in 1994.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Amazon_(company)",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.98,
+      "rationale": "Multiple sources confirm Amazon was founded by Jeff Bezos in 1994, with Wikipedia specifying July 5, 1994.",
+      "sources": [
+        "https://www.ebsco.com/research-starters/business-and-management/amazon-company",
+        "https://en.wikipedia.org/wiki/History_of_Amazon"
+      ],
+      "sub_claims": [
+        "Amazon was founded by Jeff Bezos.",
+        "Amazon was founded in 1994."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.06,
+      "stage_seconds": {
+        "decompose": 2.41,
+        "search_and_embed": 2.87,
+        "retrieve": 0.8,
+        "judge": 1.98,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3366,
+      "output_tokens": 187
+    },
+    {
+      "id": 7,
+      "claim": "The speed of light in a vacuum is approximately 299,792 kilometers per second.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Speed_of_light",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.98,
+      "rationale": "Evidence confirms the speed of light in vacuum is 299,792,458 m/s, which equals approximately 299,792 km/s, matching the claim exactly.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Speed_of_light",
+        "https://www.facebook.com/groups/38680135622/posts/10174027614590623",
+        "https://brainly.com/question/60553537"
+      ],
+      "sub_claims": [
+        "The speed of light in a vacuum is approximately 299,792 kilometers per second."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 9.56,
+      "stage_seconds": {
+        "decompose": 1.3,
+        "search_and_embed": 3.15,
+        "retrieve": 1.17,
+        "judge": 3.94,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3006,
+      "output_tokens": 202
+    },
+    {
+      "id": 8,
+      "claim": "Properly stored honey essentially never spoils.",
+      "expected_verdict": "true",
+      "reference_url": "https://www.smithsonianmag.com/science-nature/the-science-behind-honeys-eternal-shelf-life-1218690/",
+      "difficulty": "medium",
+      "predicted_verdict": "true",
+      "confidence": 0.85,
+      "rationale": "Multiple independent sources confirm that honey, when properly stored (sealed, protected from moisture), essentially never spoils, citing evidence such as ancient Egyptian tomb honey remaining edible.",
+      "sources": [
+        "https://www.reddit.com/r/askscience/comments/1aif2mf/is_it_true_that_honey_never_spoils_how_does_it",
+        "https://www.facebook.com/groups/774260022677419/posts/10064820126954649",
+        "https://www.quora.com/If-its-really-true-that-honey-never-spoils-how-come-store-bought-honey-has-an-expiration-on-it"
+      ],
+      "sub_claims": [
+        "Properly stored honey essentially never spoils."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.16,
+      "stage_seconds": {
+        "decompose": 2.25,
+        "search_and_embed": 1.8,
+        "retrieve": 0.99,
+        "judge": 3.12,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2746,
+      "output_tokens": 267
+    },
+    {
+      "id": 9,
+      "claim": "The Great Barrier Reef is the world's largest coral reef system.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Great_Barrier_Reef",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.98,
+      "rationale": "Multiple independent sources (WWF, Ocean Blue Project) confirm the Great Barrier Reef is the world's largest coral reef system.",
+      "sources": [
+        "https://wwf.org.au/what-we-do/oceans/great-barrier-reef",
+        "https://oceanblueproject.org/save-our-ocean-reef"
+      ],
+      "sub_claims": [
+        "The Great Barrier Reef is the world's largest coral reef system."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.65,
+      "stage_seconds": {
+        "decompose": 2.7,
+        "search_and_embed": 3.27,
+        "retrieve": 0.85,
+        "judge": 3.82,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3514,
+      "output_tokens": 177
+    },
+    {
+      "id": 10,
+      "claim": "Tokyo is the capital of Japan.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Tokyo",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.98,
+      "rationale": "Multiple evidence chunks from Wikipedia explicitly state that Tokyo is the capital of Japan.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Tokyo"
+      ],
+      "sub_claims": [
+        "Tokyo is the capital of Japan."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.8,
+      "stage_seconds": {
+        "decompose": 3.53,
+        "search_and_embed": 3.18,
+        "retrieve": 1.05,
+        "judge": 3.04,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3179,
+      "output_tokens": 127
+    },
+    {
+      "id": 11,
+      "claim": "The Python programming language was created by Guido van Rossum.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.98,
+      "rationale": "The evidence explicitly states Guido van Rossum is the creator of the Python programming language, confirming the claim.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Guido_van_Rossum"
+      ],
+      "sub_claims": [
+        "The Python programming language was created by Guido van Rossum."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 7.17,
+      "stage_seconds": {
+        "decompose": 1.26,
+        "search_and_embed": 3.02,
+        "retrieve": 1.13,
+        "judge": 1.75,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 4302,
+      "output_tokens": 135
+    },
+    {
+      "id": 12,
+      "claim": "The 2024 Summer Olympics were held in Paris.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/2024_Summer_Olympics",
+      "difficulty": "easy",
+      "predicted_verdict": "true",
+      "confidence": 0.99,
+      "rationale": "Evidence confirms Paris was the host city of the 2024 Summer Olympics, branded as Paris 2024.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/2024_Summer_Olympics"
+      ],
+      "sub_claims": [
+        "The 2024 Summer Olympics were held in Paris."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.13,
+      "stage_seconds": {
+        "decompose": 2.72,
+        "search_and_embed": 3.35,
+        "retrieve": 1.01,
+        "judge": 3.04,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3880,
+      "output_tokens": 139
+    },
+    {
+      "id": 13,
+      "claim": "Sharks existed on Earth before trees did.",
+      "expected_verdict": "true",
+      "reference_url": "https://en.wikipedia.org/wiki/Evolution_of_fish",
+      "difficulty": "hard",
+      "predicted_verdict": "true",
+      "confidence": 0.92,
+      "rationale": "Multiple independent sources confirm sharks first appeared roughly 450 million years ago, while the first trees appeared around 385 million years ago, meaning sharks predate trees by about 65 million years.",
+      "sources": [
+        "https://spacedaily.com/d-sharks-have-been-swimming-in-earths-oceans-for-roughly-450-million-years-which-means-they-predate-the-first-tree-by-about-65-million-years-and-when-sharks-first-appeared-the-only-plants-o",
+        "https://www.facebook.com/PBSNature/videos/whats-older-sharks-or-trees/1706378014014560",
+        "https://www.youtube.com/shorts/8PXYw0yRq08"
+      ],
+      "sub_claims": [
+        "Sharks existed on Earth before trees did."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 12.25,
+      "stage_seconds": {
+        "decompose": 1.3,
+        "search_and_embed": 2.63,
+        "retrieve": 0.64,
+        "judge": 7.69,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2572,
+      "output_tokens": 294
+    },
+    {
+      "id": 14,
+      "claim": "The Great Wall of China is visible from the Moon with the naked eye.",
+      "expected_verdict": "false",
+      "reference_url": "https://www.nasa.gov/vision/space/workinginspace/great_wall.html",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.95,
+      "rationale": "Scientific analysis in the evidence shows visibility from the moon would require visual acuity 17,000 times better than normal human eyesight, making it impossible, and other sources confirm the wall is not visible from the moon with the naked eye. A Reddit comment claiming otherwise is unsupported and contradicted by the more authoritative scientific source.",
+      "sources": [
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC3972694",
+        "https://www.facebook.com/worldatlas/posts/the-great-wall-of-china-is-not-visible-from-the-moon-with-the-naked-eye-contrary/1320024370165490"
+      ],
+      "sub_claims": [
+        "The Great Wall of China is visible from the Moon with the naked eye."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.58,
+      "stage_seconds": {
+        "decompose": 2.21,
+        "search_and_embed": 2.99,
+        "retrieve": 0.87,
+        "judge": 4.52,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2900,
+      "output_tokens": 285
+    },
+    {
+      "id": 15,
+      "claim": "Humans use only 10 percent of their brains.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Ten_percent_of_the_brain_myth",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "Evidence explicitly labels this a myth; scientists confirm virtually all of the brain is active and used over time, contradicting the claim that only 10 percent is used.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Ten-percent-of-the-brain_myth",
+        "https://www.scientificamerican.com/article/do-people-only-use-10-percent-of-their-brains"
+      ],
+      "sub_claims": [
+        "Humans use only 10 percent of their brains."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.52,
+      "stage_seconds": {
+        "decompose": 2.03,
+        "search_and_embed": 3.02,
+        "retrieve": 0.87,
+        "judge": 2.6,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3584,
+      "output_tokens": 191
+    },
+    {
+      "id": 16,
+      "claim": "Albert Einstein failed mathematics in school.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Albert_Einstein",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.95,
+      "rationale": "Multiple sources confirm this is a well-known myth; Einstein excelled in mathematics and mastered calculus before age 15. He did fail entrance exams to a Swiss school in non-scientific subjects, but not in math.",
+      "sources": [
+        "https://www.history.com/articles/9-things-you-may-not-know-about-albert-einstein",
+        "https://www.ripleys.com/stories/einstein-fail-math",
+        "https://www.reddit.com/r/AskPhysics/comments/1557k5r/was_einstein_a_bad_mathematician"
+      ],
+      "sub_claims": [
+        "Albert Einstein failed mathematics in school."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.46,
+      "stage_seconds": {
+        "decompose": 1.25,
+        "search_and_embed": 2.84,
+        "retrieve": 0.72,
+        "judge": 3.65,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3040,
+      "output_tokens": 244
+    },
+    {
+      "id": 17,
+      "claim": "Sydney is the capital of Australia.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Canberra",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.95,
+      "rationale": "Wikipedia evidence clearly states Sydney is the capital of the state of New South Wales, not Australia; Canberra is Australia's capital. The Facebook video claim appears unreliable and contradicts authoritative sources.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Sydney"
+      ],
+      "sub_claims": [
+        "Sydney is the capital of Australia."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 9.54,
+      "stage_seconds": {
+        "decompose": 2.06,
+        "search_and_embed": 3.28,
+        "retrieve": 2.03,
+        "judge": 2.17,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3696,
+      "output_tokens": 162
+    },
+    {
+      "id": 18,
+      "claim": "Goldfish have a memory span of only three seconds.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Goldfish",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "Multiple sources confirm this is a myth; goldfish can retain memories for months, as shown by scientific experiments with lever-pushing tasks tied to feeding schedules.",
+      "sources": [
+        "https://www.westeamahead.org/blog/2025/8/7/mythbuster-goldfish-have-a-3-second-memory",
+        "https://www.discoverwildlife.com/animal-facts/fish/goldfish-memory"
+      ],
+      "sub_claims": [
+        "Goldfish have a memory span of only three seconds."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.12,
+      "stage_seconds": {
+        "decompose": 1.58,
+        "search_and_embed": 1.78,
+        "retrieve": 1.28,
+        "judge": 3.49,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3414,
+      "output_tokens": 204
+    },
+    {
+      "id": 19,
+      "claim": "Napoleon Bonaparte was unusually short for a man of his era.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Napoleon#Height",
+      "difficulty": "medium",
+      "predicted_verdict": "false",
+      "confidence": 0.85,
+      "rationale": "Evidence indicates Napoleon was actually about 5'6\", which was average height for a Frenchman of his era, not unusually short. The popular belief that he was short (often cited as 5'2\") is described as a myth based on measurement unit confusion.",
+      "sources": [
+        "https://www.thoughtco.com/was-napoleon-bonaparte-short-1221108",
+        "https://www.nationalgeographic.com/history/article/napoleon-complex-height-discrimination-men-history"
+      ],
+      "sub_claims": [
+        "Napoleon Bonaparte was unusually short for a man of his era."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 7.99,
+      "stage_seconds": {
+        "decompose": 1.44,
+        "search_and_embed": 3.02,
+        "retrieve": 0.77,
+        "judge": 2.76,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3076,
+      "output_tokens": 226
+    },
+    {
+      "id": 20,
+      "claim": "Lightning never strikes the same place twice.",
+      "expected_verdict": "false",
+      "reference_url": "https://www.weather.gov/safety/lightning-myths",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "Evidence confirms this is a myth; lightning frequently strikes the same location repeatedly, such as the Empire State Building being struck about 25 times a year.",
+      "sources": [
+        "https://www.westeamahead.org/blog/2025/2/5/mythbuster-lightning-never-strikes-the-same-place-twice",
+        "https://www.facebook.com/SandraLee/posts/lightning-strikes-more-than-once-sometimes/1584100036418093"
+      ],
+      "sub_claims": [
+        "Lightning never strikes the same place twice."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 6.09,
+      "stage_seconds": {
+        "decompose": 1.26,
+        "search_and_embed": 1.12,
+        "retrieve": 1.27,
+        "judge": 2.43,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3664,
+      "output_tokens": 212
+    },
+    {
+      "id": 21,
+      "claim": "Mount Kilimanjaro is the tallest mountain in the world.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Mount_Kilimanjaro",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.98,
+      "rationale": "Evidence consistently states Kilimanjaro is Africa's tallest mountain and the world's largest free-standing mountain, not the tallest mountain in the world overall (Mount Everest holds that distinction, not addressed but implied by the specific 'Africa's tallest' framing).",
+      "sources": [
+        "https://education.nationalgeographic.org/resource/kilimanjaro",
+        "https://www.climbing-kilimanjaro.com/interesting-kilimanjaro-facts"
+      ],
+      "sub_claims": [
+        "Mount Kilimanjaro is the tallest mountain in the world."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 9.87,
+      "stage_seconds": {
+        "decompose": 2.17,
+        "search_and_embed": 2.94,
+        "retrieve": 0.83,
+        "judge": 3.92,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3726,
+      "output_tokens": 228
+    },
+    {
+      "id": 22,
+      "claim": "Vaccines cause autism.",
+      "expected_verdict": "false",
+      "reference_url": "https://www.cdc.gov/vaccine-safety/about/autism.html",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.98,
+      "rationale": "Multiple sources confirm extensive scientific research has found no link between vaccines and autism. The 1998 study that originated the claim was retracted due to fraud and flawed methodology, and large-scale studies have consistently disproven the vaccine-autism link.",
+      "sources": [
+        "https://www.autismspeaks.org/do-vaccines-cause-autism",
+        "https://publichealth.jhu.edu/2025/vaccines-do-not-cause-autism",
+        "https://media.chop.edu/data/files/pdfs/vaccine-education-center-autism.pdf"
+      ],
+      "sub_claims": [
+        "Vaccines cause autism."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 12.51,
+      "stage_seconds": {
+        "decompose": 3.24,
+        "search_and_embed": 3.57,
+        "retrieve": 0.99,
+        "judge": 4.71,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3108,
+      "output_tokens": 241
+    },
+    {
+      "id": 23,
+      "claim": "The Sun orbits the Earth.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Heliocentrism",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.98,
+      "rationale": "The evidence clearly states Earth orbits the Sun, not the other way around, confirming heliocentrism.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Earth%27s_orbit"
+      ],
+      "sub_claims": [
+        "The Sun orbits the Earth."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.98,
+      "stage_seconds": {
+        "decompose": 2.35,
+        "search_and_embed": 4.06,
+        "retrieve": 0.95,
+        "judge": 3.63,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 4242,
+      "output_tokens": 128
+    },
+    {
+      "id": 24,
+      "claim": "Vikings wore horned helmets in battle.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Horned_helmet",
+      "difficulty": "medium",
+      "predicted_verdict": "false",
+      "confidence": 0.95,
+      "rationale": "Historical and archaeological evidence consistently shows no support for Vikings wearing horned helmets in battle; this is considered a myth popularized during the 19th century Romantic revival.",
+      "sources": [
+        "https://www.historyextra.com/period/viking/historical-fact-check-vikings-myths-busted-did-wear-horned-helmets-violent-barbarians",
+        "http://www.hurstwic.org/history/articles/manufacturing/text/horned_helmets.htm"
+      ],
+      "sub_claims": [
+        "Vikings wore horned helmets in battle."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 9.47,
+      "stage_seconds": {
+        "decompose": 2.52,
+        "search_and_embed": 2.08,
+        "retrieve": 0.67,
+        "judge": 4.2,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3200,
+      "output_tokens": 217
+    },
+    {
+      "id": 25,
+      "claim": "Thomas Edison was the first person to invent an electric light bulb.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Incandescent_light_bulb",
+      "difficulty": "medium",
+      "predicted_verdict": "false",
+      "confidence": 0.85,
+      "rationale": "Evidence shows multiple bulbs and electric lights existed before Edison's 1879 invention, including Humphry Davy's 1800 electric light and Volta's earlier work. Edison is credited with creating the first commercially viable/practical bulb, not the first electric light bulb ever.",
+      "sources": [
+        "https://www.sciencefocus.com/science/who-really-invented-the-light-bulb",
+        "https://www.reddit.com/r/todayilearned/comments/o0mrhj/til_that_thomas_edison_didnt_invent_the_light"
+      ],
+      "sub_claims": [
+        "Thomas Edison was the first person to invent an electric light bulb."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 12.92,
+      "stage_seconds": {
+        "decompose": 1.24,
+        "search_and_embed": 7.27,
+        "retrieve": 0.98,
+        "judge": 3.44,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3184,
+      "output_tokens": 250
+    },
+    {
+      "id": 26,
+      "claim": "Bats are blind.",
+      "expected_verdict": "false",
+      "reference_url": "https://en.wikipedia.org/wiki/Bat",
+      "difficulty": "easy",
+      "predicted_verdict": "false",
+      "confidence": 0.98,
+      "rationale": "Multiple sources including USGS and other scientific sources confirm bats are not blind and have functional, often well-adapted vision, contradicting the claim.",
+      "sources": [
+        "https://www.usgs.gov/faqs/are-bats-blind",
+        "https://www.wtamu.edu/~cbaird/sq/2013/04/09/why-are-bats-blind"
+      ],
+      "sub_claims": [
+        "Bats are blind."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 9.47,
+      "stage_seconds": {
+        "decompose": 1.49,
+        "search_and_embed": 3.74,
+        "retrieve": 2.01,
+        "judge": 2.23,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3720,
+      "output_tokens": 171
+    },
+    {
+      "id": 27,
+      "claim": "Tesla was founded by Elon Musk in 2003.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://en.wikipedia.org/wiki/Tesla,_Inc.",
+      "difficulty": "hard",
+      "notes": "Founded in 2003 (true) by Eberhard and Tarpenning; Musk joined in 2004 as an investor/chairman (so 'founded by Musk' is false).",
+      "predicted_verdict": "false",
+      "confidence": 0.95,
+      "rationale": "Evidence consistently shows Tesla was founded in July 2003 by Martin Eberhard and Marc Tarpenning, not Elon Musk, who joined later as an early investor and board member before becoming CEO in 2008. While Tesla later legally recognized Musk as one of five founders, the claim that he founded the company in 2003 is contradicted by multiple sources.",
+      "sources": [
+        "https://www.investopedia.com/articles/personal-finance/061915/story-behind-teslas-success.asp",
+        "https://en.wikipedia.org/wiki/History_of_Tesla,_Inc.",
+        "https://www.facebook.com/FortuneMagazine/posts/-today-marks-23-years-since-tesla-was-founded-on-july-1-2003-since-then-it-has-b/1373947571262320"
+      ],
+      "sub_claims": [
+        "Tesla was founded by Elon Musk.",
+        "Tesla was founded in 2003."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.53,
+      "stage_seconds": {
+        "decompose": 1.84,
+        "search_and_embed": 2.8,
+        "retrieve": 0.97,
+        "judge": 4.92,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3935,
+      "output_tokens": 343
+    },
+    {
+      "id": 28,
+      "claim": "Christopher Columbus reached the Americas in 1492, proving for the first time that the Earth was round.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://en.wikipedia.org/wiki/Myth_of_the_flat_Earth",
+      "difficulty": "hard",
+      "notes": "1492 voyage: true. 'Proving the Earth was round': false \u2014 sphericity was long established.",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "The evidence consistently shows that educated people, including Columbus and his contemporaries, already knew the Earth was round before 1492. The idea that Columbus 'proved' the Earth was round is a well-documented myth originating from Washington Irving's 1828 biography, not historical fact.",
+      "sources": [
+        "https://www.history.com/articles/christopher-columbus-never-set-out-to-prove-the-earth-was-round",
+        "https://www.csmonitor.com/USA/2011/1010/Christopher-Columbus-Five-things-you-thought-you-knew-about-the-explorer/MYTH-Columbus-set-out-to-prove-the-earth-was-round",
+        "https://pwg.gsfc.nasa.gov/stargaze/Scolumb.htm",
+        "https://www.youtube.com/watch?v=F_Tbw5q219w"
+      ],
+      "sub_claims": [
+        "Christopher Columbus reached the Americas in 1492.",
+        "Columbus's 1492 voyage proved for the first time that the Earth was round."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [
+        "search 'Christopher Columbus reached the Americas in 1492.': _ssl.c:1064: The handshake operation timed out",
+        "search \"Columbus's 1492 voyage proved for the first time that the Earth was round.\": _ssl.c:1064: The handshake operation timed out"
+      ],
+      "latency_seconds": 57.54,
+      "stage_seconds": {
+        "decompose": 3.32,
+        "search_and_embed": 48.23,
+        "retrieve": 0.85,
+        "judge": 5.14,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3917,
+      "output_tokens": 374
+    },
+    {
+      "id": 29,
+      "claim": "The Berlin Wall fell in 1989, marking the official end of World War II.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://en.wikipedia.org/wiki/Berlin_Wall",
+      "difficulty": "medium",
+      "notes": "Fell 1989: true. WWII ended 1945: the second half is false.",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "The Berlin Wall did fall in 1989, but the evidence shows it marked the end of the Cold War, not World War II, which ended in 1945. World War II had already ended decades before the wall fell.",
+      "sources": [
+        "https://www.nationalww2museum.org/war/articles/all-fall-down-end-world-war-ii-europe",
+        "https://www.ebsco.com/research-starters/history/fall-berlin-wall",
+        "https://en.wikipedia.org/wiki/Fall_of_the_Berlin_Wall"
+      ],
+      "sub_claims": [
+        "The Berlin Wall fell in 1989.",
+        "The fall of the Berlin Wall marked the official end of World War II."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 12.18,
+      "stage_seconds": {
+        "decompose": 2.67,
+        "search_and_embed": 5.85,
+        "retrieve": 0.92,
+        "judge": 2.73,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3748,
+      "output_tokens": 258
+    },
+    {
+      "id": 30,
+      "claim": "Mount Everest, located in Japan, is the tallest mountain above sea level.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://en.wikipedia.org/wiki/Mount_Everest",
+      "difficulty": "medium",
+      "notes": "Tallest: true. Located in Japan: false (Nepal/China border).",
+      "predicted_verdict": "false",
+      "confidence": 0.95,
+      "rationale": "Mount Everest is located in Nepal/Tibet (China), not Japan; the evidence discusses Japanese expeditions climbing Everest, not Everest being located in Japan. The claim's location is factually incorrect based on context.",
+      "sources": [
+        "https://www.himalayanclub.org/hj/31/8/the-japanese-mount-everest-expedition-1969-1970"
+      ],
+      "sub_claims": [
+        "Mount Everest is located in Japan.",
+        "Mount Everest is the tallest mountain above sea level."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 13.65,
+      "stage_seconds": {
+        "decompose": 2.22,
+        "search_and_embed": 6.42,
+        "retrieve": 0.93,
+        "judge": 4.08,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3160,
+      "output_tokens": 205
+    },
+    {
+      "id": 31,
+      "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of relativity.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://www.nobelprize.org/prizes/physics/1921/einstein/facts/",
+      "difficulty": "hard",
+      "notes": "Won the 1921 prize: true. For relativity: false \u2014 it was for the photoelectric effect.",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "Evidence clearly states Einstein received the 1921 Nobel Prize in Physics for his discovery of the law of the photoelectric effect, not for the theory of relativity.",
+      "sources": [
+        "https://www.theatlantic.com/technology/archive/2014/09/einstein-didnt-win-a-nobel-for-relativity-he-won-it-for-this/380451",
+        "https://www.advancedsciencenews.com/the-dramatic-story-behind-general-relativitys-nobel-prize-snub"
+      ],
+      "sub_claims": [
+        "Albert Einstein won the 1921 Nobel Prize in Physics.",
+        "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of relativity."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.74,
+      "stage_seconds": {
+        "decompose": 2.23,
+        "search_and_embed": 5.17,
+        "retrieve": 0.74,
+        "judge": 2.6,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 4034,
+      "output_tokens": 355
+    },
+    {
+      "id": 32,
+      "claim": "The Amazon rainforest is the largest tropical rainforest on Earth and lies entirely within Brazil.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://en.wikipedia.org/wiki/Amazon_rainforest",
+      "difficulty": "medium",
+      "notes": "Largest: true. Entirely within Brazil: false (spans 9 countries; ~60% in Brazil).",
+      "predicted_verdict": "mixed",
+      "confidence": 0.95,
+      "rationale": "Evidence confirms the Amazon is the largest tropical rainforest, but it spans nine countries, not entirely within Brazil, contradicting that part of the claim.",
+      "sources": [
+        "https://www.ebsco.com/research-starters/earth-and-atmospheric-sciences/amazon-rainforest"
+      ],
+      "sub_claims": [
+        "The Amazon rainforest is the largest tropical rainforest on Earth.",
+        "The Amazon rainforest lies entirely within Brazil."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 8.89,
+      "stage_seconds": {
+        "decompose": 1.84,
+        "search_and_embed": 2.65,
+        "retrieve": 1.11,
+        "judge": 3.29,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3776,
+      "output_tokens": 197
+    },
+    {
+      "id": 33,
+      "claim": "The Titanic sank in 1912 on its maiden voyage after hitting an iceberg, killing everyone on board.",
+      "expected_verdict": "mixed",
+      "reference_url": "https://en.wikipedia.org/wiki/Titanic",
+      "difficulty": "medium",
+      "notes": "1912/maiden voyage/iceberg: true. Everyone died: false (~700 survived).",
+      "predicted_verdict": "false",
+      "confidence": 0.97,
+      "rationale": "Evidence confirms the Titanic sank in 1912 on its maiden voyage after hitting an iceberg, but 710 survived per ABC News and 705 per Britannica, contradicting the claim that everyone died.",
+      "sources": [
+        "https://www.facebook.com/ABCNews/posts/on-this-day-in-1912-the-british-luxury-liner-rms-titanic-sunk-in-the-north-atlan/1379944633992413",
+        "https://www.britannica.com/topic/Titanic"
+      ],
+      "sub_claims": [
+        "The Titanic sank in 1912.",
+        "The Titanic sank on its maiden voyage.",
+        "The Titanic sank after hitting an iceberg.",
+        "Everyone on board the Titanic died."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 15.19,
+      "stage_seconds": {
+        "decompose": 2.76,
+        "search_and_embed": 7.66,
+        "retrieve": 2.12,
+        "judge": 2.65,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3761,
+      "output_tokens": 277
+    },
+    {
+      "id": 34,
+      "claim": "There are exactly 3 trillion fish in the Pacific Ocean right now.",
+      "expected_verdict": "unverifiable",
+      "reference_url": null,
+      "difficulty": "medium",
+      "notes": "No source could verify an exact live count.",
+      "predicted_verdict": "false",
+      "confidence": 0.75,
+      "rationale": "The evidence estimates about 3.5 trillion fish in all oceans combined (not specifically the Pacific), and it is explicitly stated this is an estimate that is 'ever changing' and impossible to count precisely. The claim's specific figure of 'exactly 3 trillion' for the Pacific Ocean alone is not supported and contradicts the cited estimate.",
+      "sources": [
+        "https://about.conservationevidence.com/2022/07/11/plenty-more-fish-in-the-ce-synopsis-on-marine-fish-conservation"
+      ],
+      "sub_claims": [
+        "There are exactly 3 trillion fish in the Pacific Ocean right now."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 15.26,
+      "stage_seconds": {
+        "decompose": 2.05,
+        "search_and_embed": 8.29,
+        "retrieve": 1.32,
+        "judge": 3.61,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2878,
+      "output_tokens": 252
+    },
+    {
+      "id": 35,
+      "claim": "Extraterrestrials visited Earth during the construction of the Egyptian pyramids.",
+      "expected_verdict": "unverifiable",
+      "reference_url": null,
+      "difficulty": "medium",
+      "notes": "No credible evidence either way; fringe claim.",
+      "predicted_verdict": "false",
+      "confidence": 0.85,
+      "rationale": "The evidence explicitly states there is no evidence that extraterrestrials helped build the pyramids, and explains the pyramids could be built with human labor and hard work without advanced technology.",
+      "sources": [
+        "https://www.quora.com/Is-there-any-evidence-to-support-the-theory-of-aliens-visiting-Earth-in-ancient-times-such-as-during-the-construction-of-the-Egyptian-pyramids-What-is-your-opinion-on-this-topic-and-why"
+      ],
+      "sub_claims": [
+        "Extraterrestrials visited Earth during the construction of the Egyptian pyramids."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 10.54,
+      "stage_seconds": {
+        "decompose": 2.87,
+        "search_and_embed": 3.18,
+        "retrieve": 1.02,
+        "judge": 3.47,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 4268,
+      "output_tokens": 239
+    },
+    {
+      "id": 36,
+      "claim": "Coffee is the best beverage in the world.",
+      "expected_verdict": "unverifiable",
+      "reference_url": null,
+      "difficulty": "easy",
+      "notes": "Pure opinion \u2014 not a checkable factual claim.",
+      "predicted_verdict": "unverifiable",
+      "confidence": 0.9,
+      "rationale": "The claim is a subjective opinion, not a factual assertion that can be verified. Evidence shows coffee is popular and praised by some sources, but 'best beverage' is a matter of taste with no objective measure provided.",
+      "sources": [],
+      "sub_claims": [
+        "Coffee is the best beverage in the world."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 7.8,
+      "stage_seconds": {
+        "decompose": 1.53,
+        "search_and_embed": 2.99,
+        "retrieve": 0.93,
+        "judge": 2.35,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3304,
+      "output_tokens": 139
+    },
+    {
+      "id": 37,
+      "claim": "A butterfly flapping its wings in Brazil caused Hurricane Katrina.",
+      "expected_verdict": "unverifiable",
+      "reference_url": null,
+      "difficulty": "hard",
+      "notes": "Chaos-theory metaphor; untestable as a causal claim.",
+      "predicted_verdict": "false",
+      "confidence": 0.9,
+      "rationale": "The butterfly effect is a metaphorical/theoretical concept illustrating sensitivity to initial conditions in chaotic systems, not a literal, verifiable causal claim about a specific real hurricane. Evidence shows the concept originated as a hypothetical question and was never intended to imply actual causation, and there is no evidence linking a butterfly to Hurricane Katrina specifically.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Butterfly_effect",
+        "https://www.americanscientist.org/article/understanding-the-butterfly-effect"
+      ],
+      "sub_claims": [
+        "A butterfly flapping its wings in Brazil caused Hurricane Katrina."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 12.59,
+      "stage_seconds": {
+        "decompose": 1.91,
+        "search_and_embed": 3.0,
+        "retrieve": 0.78,
+        "judge": 6.9,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3250,
+      "output_tokens": 263
+    },
+    {
+      "id": 38,
+      "claim": "Shakespeare's plays were secretly written by Francis Bacon.",
+      "expected_verdict": "unverifiable",
+      "reference_url": "https://en.wikipedia.org/wiki/Baconian_theory_of_Shakespeare_authorship",
+      "difficulty": "hard",
+      "notes": "Fringe authorship theory; mainstream scholarship rejects it but definitive proof either way is absent \u2014 a defensible alternative label is 'false'.",
+      "predicted_verdict": "false",
+      "confidence": 0.9,
+      "rationale": "The evidence describes the Baconian theory as a fringe hypothesis, explicitly stating that nearly all academic Shakespeare scholars reject the claim that Francis Bacon wrote Shakespeare's plays. Thus the claim is not supported as fact but is a rejected conspiracy theory.",
+      "sources": [
+        "https://en.wikipedia.org/wiki/Baconian_theory_of_Shakespeare_authorship"
+      ],
+      "sub_claims": [
+        "Shakespeare's plays were secretly written by Francis Bacon."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 7.87,
+      "stage_seconds": {
+        "decompose": 2.29,
+        "search_and_embed": 2.42,
+        "retrieve": 0.68,
+        "judge": 2.48,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3364,
+      "output_tokens": 213
+    },
+    {
+      "id": 39,
+      "claim": "Humanity will establish a permanent colony on Mars by 2050.",
+      "expected_verdict": "unverifiable",
+      "reference_url": null,
+      "difficulty": "easy",
+      "notes": "Future prediction \u2014 cannot be verified today.",
+      "predicted_verdict": "unverifiable",
+      "confidence": 0.75,
+      "rationale": "The evidence only contains speculative hopes and goals from Musk and Zubrin about a possible Mars colony by 2050, not confirmed facts or established outcomes. Since this claim is about a future event, current evidence cannot verify whether it will actually happen.",
+      "sources": [
+        "https://www.the-independent.com/space/elon-musk-mars-colony-spacex-interstellar-b1964122.html",
+        "https://www.reddit.com/r/space/comments/hqr8hb/1000_human_colony_on_mars_by_2050",
+        "https://www.facebook.com/StarTalk/posts/how-feasible-is-it-really-to-get-boots-on-mars-by-2050/1428982995527422"
+      ],
+      "sub_claims": [
+        "Humanity will establish a permanent colony on Mars by 2050."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 6.36,
+      "stage_seconds": {
+        "decompose": 2.84,
+        "search_and_embed": 0.3,
+        "retrieve": 0.21,
+        "judge": 3.02,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 2218,
+      "output_tokens": 303
+    },
+    {
+      "id": 40,
+      "claim": "Satoshi Nakamoto, the creator of Bitcoin, is actually a group of five people.",
+      "expected_verdict": "unverifiable",
+      "reference_url": "https://en.wikipedia.org/wiki/Satoshi_Nakamoto",
+      "difficulty": "medium",
+      "notes": "Identity remains unknown; the specific 'five people' claim has no evidence.",
+      "predicted_verdict": "unverifiable",
+      "confidence": 0.75,
+      "rationale": "Evidence indicates identity of Satoshi Nakamoto is unresolved; some sources speculate it could be a group, but none confirm a specific group of exactly five people. The 'five people' articles are speculative lists of candidates, not evidence of a confirmed group identity.",
+      "sources": [
+        "https://www.ledger.com/academy/topics/crypto/who-is-satoshi-nakamoto",
+        "https://www.investopedia.com/tech/three-people-who-were-supposedly-bitcoin-founder-satoshi-nakamoto"
+      ],
+      "sub_claims": [
+        "Satoshi Nakamoto is the creator of Bitcoin.",
+        "Satoshi Nakamoto is actually a group of five people."
+      ],
+      "low_confidence": false,
+      "retries": 0,
+      "errors": [],
+      "latency_seconds": 12.89,
+      "stage_seconds": {
+        "decompose": 1.88,
+        "search_and_embed": 5.43,
+        "retrieve": 0.76,
+        "judge": 4.81,
+        "finalize": 0.0
+      },
+      "llm_calls": 2,
+      "input_tokens": 3248,
+      "output_tokens": 274
+    }
+  ]
+}
