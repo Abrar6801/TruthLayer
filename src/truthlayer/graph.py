@@ -33,6 +33,7 @@ Graph shape:
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Literal, TypedDict, cast
 
 from langchain_core.runnables import RunnableConfig
@@ -42,7 +43,7 @@ from langgraph.graph.state import CompiledStateGraph
 from truthlayer.config import get_settings
 from truthlayer.db import RetrievedChunk
 from truthlayer.decompose import broaden_query, decompose_claim
-from truthlayer.ingest import ingest_for_query
+from truthlayer.ingest import collect_chunks_for_query, embed_and_store
 from truthlayer.retrieval import retrieve_evidence
 from truthlayer.verdict import DEFAULT_JUDGE_ATTEMPTS, Verdict, VerdictParseError, generate_verdict
 
@@ -93,23 +94,70 @@ def _node_decompose(state: TruthLayerState) -> dict[str, Any]:
 
 
 def _node_search_and_embed(state: TruthLayerState) -> dict[str, Any]:
-    """Run search → chunk → embed → store for each pending query, deduped by URL."""
-    seen = set(state.get("ingested_urls", []))
-    stored_total = state.get("chunks_stored", 0)
+    """Search → extract → chunk per query CONCURRENTLY, then embed/store once.
+
+    The network phase (Tavily + page text) is pure I/O with no shared state,
+    so sub-claims fan out across a bounded thread pool — the pool size is the
+    concurrency limit that keeps a 4-sub-claim decomposition from firing
+    unbounded simultaneous calls into free-tier rate limits. Embedding and
+    the DB insert stay in this thread: the local model isn't guaranteed
+    thread-safe, and merging first turns N small embed batches into one big
+    efficient one. No LLM calls happen here, so the request budget is
+    untouched by concurrency.
+    """
+    seen = frozenset(state.get("ingested_urls", []))
+    queries = state.get("search_queries", [])
     errors = list(state.get("errors", []))
+    settings = get_settings()
+
+    collected: list[tuple[str, tuple[list[str], list[str], list[str]]]] = []
+    if len(queries) <= 1:
+        # No fan-out to parallelize; skip the pool overhead.
+        for query in queries:
+            try:
+                collected.append((query, collect_chunks_for_query(query, skip_urls=set(seen))))
+            except Exception as exc:
+                logger.warning("Search failed for %r: %s", query, exc)
+                errors.append(f"search {query!r}: {exc}")
+    else:
+        with ThreadPoolExecutor(max_workers=settings.search_concurrency) as pool:
+            futures = {
+                pool.submit(collect_chunks_for_query, query, set(seen)): query for query in queries
+            }
+            for future in as_completed(futures):
+                query = futures[future]
+                try:
+                    collected.append((query, future.result()))
+                except Exception as exc:  # one dead query must not sink the others
+                    logger.warning("Search failed for %r: %s", query, exc)
+                    errors.append(f"search {query!r}: {exc}")
+
+    # Merge in deterministic query order, deduping URLs that overlapped
+    # BETWEEN concurrent branches (each branch only knew the initial seen set).
+    collected.sort(key=lambda pair: queries.index(pair[0]))
+    merged_chunks: list[str] = []
+    merged_urls: list[str] = []
     new_urls: list[str] = []
-    for query in state.get("search_queries", []):
+    merged_seen = set(seen)
+    for _, (chunks, source_urls, used_urls) in collected:
+        fresh = {u for u in used_urls if u not in merged_seen}
+        for chunk, url in zip(chunks, source_urls, strict=True):
+            if url in fresh:
+                merged_chunks.append(chunk)
+                merged_urls.append(url)
+        new_urls.extend(u for u in used_urls if u in fresh)
+        merged_seen.update(fresh)
+
+    stored = 0
+    if merged_chunks:
         try:
-            stored, urls = ingest_for_query(query, claim_query=state["claim"], skip_urls=seen)
-        except Exception as exc:  # one dead query must not sink the others
-            logger.warning("Search/ingest failed for %r: %s", query, exc)
-            errors.append(f"search {query!r}: {exc}")
-            continue
-        stored_total += stored
-        new_urls.extend(urls)
-        seen.update(urls)
+            stored = embed_and_store(merged_chunks, merged_urls, claim_query=state["claim"])
+        except Exception as exc:
+            logger.error("Embed/store failed: %s", exc)
+            errors.append(f"embed_and_store: {exc}")
+
     return {
-        "chunks_stored": stored_total,
+        "chunks_stored": state.get("chunks_stored", 0) + stored,
         "ingested_urls": state.get("ingested_urls", []) + new_urls,
         "errors": errors,
     }

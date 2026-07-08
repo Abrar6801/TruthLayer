@@ -38,12 +38,16 @@ class _Recorder:
 def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
     rec = _Recorder()
 
-    def fake_ingest(query: str, claim_query: str, skip_urls: set[str] | None = None) -> Any:
+    def fake_collect(query: str, skip_urls: set[str] | None = None) -> Any:
         rec.ingest_calls.append((query, set(skip_urls or set())))
-        return 5, [f"https://{len(rec.ingest_calls)}.example"]
+        url = f"https://{len(rec.ingest_calls)}.example"
+        return [f"chunk from {query}"], [url], [url]
 
     monkeypatch.setattr(graph_module, "decompose_claim", lambda claim: [f"sub of {claim}"])
-    monkeypatch.setattr(graph_module, "ingest_for_query", fake_ingest)
+    monkeypatch.setattr(graph_module, "collect_chunks_for_query", fake_collect)
+    monkeypatch.setattr(
+        graph_module, "embed_and_store", lambda chunks, urls, claim_query: len(chunks)
+    )
     monkeypatch.setattr(graph_module, "retrieve_evidence", lambda claim: [_chunk()])
     monkeypatch.setattr(graph_module, "broaden_query", lambda claim, prev: rec_broaden(rec, claim))
     return rec
@@ -158,13 +162,54 @@ def test_no_evidence_skips_llm_judge(monkeypatch: pytest.MonkeyPatch, recorder: 
     assert state["low_confidence"] is True
 
 
+def test_concurrent_fanout_dedups_overlapping_urls(
+    monkeypatch: pytest.MonkeyPatch, recorder: _Recorder
+) -> None:
+    """Two sub-claims whose searches return the SAME url: only one copy stored."""
+    monkeypatch.setattr(
+        graph_module, "decompose_claim", lambda claim: ["sub one", "sub two", "sub three"]
+    )
+
+    def overlapping_collect(query: str, skip_urls: set[str] | None = None) -> Any:
+        # Every branch returns the same shared URL plus one unique URL.
+        shared = "https://shared.example"
+        unique = f"https://{query.replace(' ', '-')}.example"
+        return (
+            [f"shared chunk via {query}", f"unique chunk via {query}"],
+            [shared, unique],
+            [shared, unique],
+        )
+
+    stored_batches: list[list[str]] = []
+
+    def capture_store(chunks: list[str], urls: list[str], claim_query: str) -> int:
+        stored_batches.append(list(urls))
+        return len(chunks)
+
+    monkeypatch.setattr(graph_module, "collect_chunks_for_query", overlapping_collect)
+    monkeypatch.setattr(graph_module, "embed_and_store", capture_store)
+    monkeypatch.setattr(
+        graph_module,
+        "generate_verdict",
+        lambda claim, evidence, max_attempts=2: _verdict(confidence=0.9),
+    )
+
+    state = build_graph().invoke({"claim": "compound claim", "llm_calls_used": 0})
+
+    # One embed/store batch for the whole fan-out (merged), and the shared
+    # URL appears exactly once across everything stored.
+    assert len(stored_batches) == 1
+    assert stored_batches[0].count("https://shared.example") == 1
+    assert state["ingested_urls"].count("https://shared.example") == 1
+
+
 def test_search_failure_does_not_sink_request(
     monkeypatch: pytest.MonkeyPatch, recorder: _Recorder
 ) -> None:
-    def broken_ingest(query: str, claim_query: str, skip_urls: set[str] | None = None) -> Any:
+    def broken_collect(query: str, skip_urls: set[str] | None = None) -> Any:
         raise RuntimeError("tavily down")
 
-    monkeypatch.setattr(graph_module, "ingest_for_query", broken_ingest)
+    monkeypatch.setattr(graph_module, "collect_chunks_for_query", broken_collect)
     monkeypatch.setattr(
         graph_module,
         "generate_verdict",

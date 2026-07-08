@@ -36,39 +36,34 @@ def _clean_result_text(result: SearchResult) -> str:
     return content
 
 
-def ingest_for_query(
+def collect_chunks_for_query(
     query: str,
-    claim_query: str,
     skip_urls: set[str] | None = None,
-) -> tuple[int, list[str]]:
-    """Search the web for `query` and store embedded evidence chunks.
+) -> tuple[list[str], list[str], list[str]]:
+    """The network phase: search → skip known URLs → extract → chunk.
 
-    Pipeline: web search → skip already-ingested URLs → clean text per page →
-    chunk → cap total chunks → embed in batches → insert.
-
-    Args:
-        query: The search query to run (a sub-claim, or a broadened query).
-        claim_query: The original claim this evidence is being gathered for
-            (stored on every chunk for traceability).
-        skip_urls: URLs already ingested during this request; results from
-            these are skipped to avoid duplicate evidence.
+    Pure I/O + text processing with no shared state, so the graph can safely
+    run several of these concurrently (one per sub-claim). Embedding and
+    storage happen separately in `embed_and_store` — the local model isn't
+    guaranteed thread-safe, and merging first means one big efficient batch.
 
     Returns:
-        (chunks_stored, newly_ingested_urls)
+        (chunks, source_urls, used_urls) — parallel lists plus the distinct
+        URLs that produced text.
     """
     settings = get_settings()
     seen = skip_urls or set()
     results = tavily_search(query)
     if not results:
         logger.warning("Search returned no usable results for query: %r", query)
-        return 0, []
+        return [], [], []
 
     fresh = [r for r in results if r.url not in seen]
     if len(fresh) < len(results):
         logger.info("Skipping %d already-ingested URL(s)", len(results) - len(fresh))
     if not fresh:
-        return 0, []
-    logger.info("Fetched %d new pages of candidate evidence", len(fresh))
+        return [], [], []
+    logger.info("Fetched %d new pages of candidate evidence for %r", len(fresh), query[:60])
 
     chunks: list[str] = []
     source_urls: list[str] = []
@@ -82,11 +77,7 @@ def ingest_for_query(
             chunks.append(chunk)
             source_urls.append(result.url)
 
-    if not chunks:
-        logger.warning("No readable text extracted from any search result")
-        return 0, []
-
-    # Cap per-query storage so one request can't fill the database unboundedly.
+    # Cap per-query so one request can't fill the database unboundedly.
     if len(chunks) > settings.max_chunks_per_claim:
         logger.info(
             "Capping chunks from %d to %d (max_chunks_per_claim)",
@@ -96,10 +87,33 @@ def ingest_for_query(
         chunks = chunks[: settings.max_chunks_per_claim]
         source_urls = source_urls[: settings.max_chunks_per_claim]
         used_urls = [url for url in used_urls if url in set(source_urls)]
+    return chunks, source_urls, used_urls
 
+
+def embed_and_store(chunks: list[str], source_urls: list[str], claim_query: str) -> int:
+    """The compute/storage phase: embed one merged batch and insert it."""
+    if not chunks:
+        logger.warning("No readable text extracted for %r", claim_query[:60])
+        return 0
     logger.info("Embedding %d chunks", len(chunks))
     embeddings = embed_texts(chunks)
-    stored = insert_chunks(chunks, embeddings, source_urls, claim_query=claim_query)
+    return insert_chunks(chunks, embeddings, source_urls, claim_query=claim_query)
+
+
+def ingest_for_query(
+    query: str,
+    claim_query: str,
+    skip_urls: set[str] | None = None,
+) -> tuple[int, list[str]]:
+    """Search the web for `query` and store embedded evidence chunks.
+
+    Sequential convenience wrapper over collect + embed/store.
+
+    Returns:
+        (chunks_stored, newly_ingested_urls)
+    """
+    chunks, source_urls, used_urls = collect_chunks_for_query(query, skip_urls=skip_urls)
+    stored = embed_and_store(chunks, source_urls, claim_query=claim_query)
     return stored, used_urls
 
 
