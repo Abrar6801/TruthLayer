@@ -86,6 +86,16 @@ class Settings:
     http_timeout_seconds: float = 15.0
     http_max_retries: int = 3
 
+    # --- API service (Phase 2) ---
+    # Our own service-to-service key: the Next.js server (not the browser)
+    # presents this to FastAPI. Distinct from the Anthropic key. Empty means
+    # "not configured" — the API refuses to serve /verify without it.
+    truthlayer_api_key: str = ""
+    # Comma-separated CORS allowlist; only the frontend's origin belongs here.
+    allowed_origins: str = "http://localhost:3000"
+    # slowapi rate limit for /verify (per client IP).
+    verify_rate_limit: str = "10/minute"
+
 
 def _read_optional_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
@@ -154,4 +164,7 @@ def get_settings() -> Settings:
             "HTTP_TIMEOUT_SECONDS", defaults.http_timeout_seconds
         ),
         http_max_retries=_read_optional_int("HTTP_MAX_RETRIES", defaults.http_max_retries),
+        truthlayer_api_key=os.environ.get("TRUTHLAYER_API_KEY", defaults.truthlayer_api_key),
+        allowed_origins=os.environ.get("ALLOWED_ORIGINS", defaults.allowed_origins),
+        verify_rate_limit=os.environ.get("VERIFY_RATE_LIMIT", defaults.verify_rate_limit),
     )

@@ -1,5 +1,40 @@
 # TruthLayer learning notes
 
+## 2026-07-07 — Tasks 2.5–2.6: FastAPI service, auth, and hardening
+
+**What was built:** `src/truthlayer/api.py` — a FastAPI app exposing
+`POST /verify` (Pydantic-validated, rate-limited, API-key-authenticated) and
+`GET /health`, with per-app slowapi rate limiting, env-driven CORS, and a
+catch-all error handler that logs full tracebacks server-side (with a
+correlation id) but never leaks them to clients. Run locally with:
+`uvicorn --factory truthlayer.api:create_app --reload`.
+
+**Key concepts:**
+- **Service-to-service vs user auth:** this API doesn't know or care *who*
+  the human is — it only verifies the caller is *our frontend server*, via a
+  single shared secret in `X-API-Key`, compared with
+  `secrets.compare_digest` (constant-time, resists timing attacks). User
+  auth answers "who are you?"; service auth answers "are you even one of
+  ours?". Confusing the two leads to putting service keys in browsers.
+- **Why async matters for THIS endpoint:** /verify spends 10-20s waiting on
+  Tavily/Claude, not computing. `asyncio.to_thread` pushes the sync graph
+  onto a worker thread so the event loop keeps accepting requests; a sync
+  handler would pin one server worker per in-flight verify.
+- **Rate limiting as cost control:** every /verify triggers paid Anthropic +
+  Tavily calls, so an unlimited public endpoint is a blank check. slowapi
+  keys limits per client IP.
+- **Fail-fast startup:** the lifespan hook refuses to boot without
+  TRUTHLAYER_API_KEY — better a dead process at deploy time than an open
+  endpoint at runtime.
+
+**Decisions & tradeoffs:**
+- Limiter is created per-app in the factory, not module-level — a shared
+  limiter accumulates duplicate limit registrations each factory call
+  (found via a failing test: requests were being counted N times).
+- Error responses carry a short random reference id so a user can report an
+  error that we can find in logs, without exposing anything about internals.
+
+
 ## 2026-07-07 — Tasks 2.1–2.4: the LangGraph agentic pipeline
 
 **What was built:** `src/truthlayer/graph.py` — a LangGraph state machine
