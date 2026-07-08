@@ -24,6 +24,7 @@ import anthropic
 from pydantic import BaseModel, Field, ValidationError
 
 from truthlayer.config import get_settings
+from truthlayer.verdict import _record_usage
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ def decompose_claim(claim: str, client: anthropic.Anthropic | None = None) -> li
         system=_DECOMPOSE_SYSTEM,
         messages=[{"role": "user", "content": f"<claim>\n{claim}\n</claim>"}],
     )
+    _record_usage("decompose", message)
     raw = "".join(block.text for block in message.content if block.type == "text").strip()
     if raw.startswith("```"):
         raw = raw.strip("`").removeprefix("json").strip()
@@ -133,6 +135,7 @@ def broaden_query(
             }
         ],
     )
+    _record_usage("broaden", message)
     query = "".join(block.text for block in message.content if block.type == "text").strip()
     # One line, reasonable length, actually different — otherwise fall back.
     query = query.splitlines()[0].strip().strip('"') if query else ""

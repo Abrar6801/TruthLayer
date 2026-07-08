@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal, TypedDict, cast
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -261,7 +262,13 @@ def get_graph() -> CompiledStateGraph[TruthLayerState, None, TruthLayerState, Tr
 
 
 def verify_claim(claim: str) -> TruthLayerState:
-    """Run the full agentic pipeline for one claim and return the final state."""
+    """Run the full agentic pipeline for one claim and return the final state.
+
+    When LangSmith tracing is enabled (LANGSMITH_TRACING=true +
+    LANGSMITH_API_KEY + LANGSMITH_PROJECT env vars), LangGraph traces every
+    node automatically; the metadata below makes traces filterable by claim
+    and outcome in the LangSmith UI.
+    """
     initial: TruthLayerState = {
         "claim": claim,
         "retry_count": 0,
@@ -270,5 +277,10 @@ def verify_claim(claim: str) -> TruthLayerState:
         "ingested_urls": [],
         "chunks_stored": 0,
     }
-    final = cast(TruthLayerState, get_graph().invoke(initial))
+    config = RunnableConfig(
+        run_name="truthlayer.verify",
+        metadata={"claim_preview": claim[:120]},
+        tags=["verify"],
+    )
+    final = cast(TruthLayerState, get_graph().invoke(initial, config=config))
     return final

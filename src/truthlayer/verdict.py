@@ -27,8 +27,19 @@ from pydantic import BaseModel, Field, ValidationError
 
 from truthlayer.config import get_settings
 from truthlayer.db import RetrievedChunk
+from truthlayer.telemetry import record as _record_telemetry
 
 logger = logging.getLogger(__name__)
+
+
+def _record_usage(stage: str, message: anthropic.types.Message) -> None:
+    """Report a Claude call's token usage to the per-request accumulator."""
+    usage = getattr(message, "usage", None)
+    _record_telemetry(
+        stage,
+        input_tokens=getattr(usage, "input_tokens", 0) or 0,
+        output_tokens=getattr(usage, "output_tokens", 0) or 0,
+    )
 
 
 class Verdict(BaseModel):
@@ -164,6 +175,7 @@ def generate_verdict(
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
+        _record_usage("judge", message)
         raw_text = "".join(block.text for block in message.content if block.type == "text")
         try:
             verdict = _parse_verdict(raw_text)

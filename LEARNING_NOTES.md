@@ -1,5 +1,74 @@
 # TruthLayer learning notes
 
+## 2026-07-08 — Task 2.7: Dockerization (and the psycopg refactor it forced)
+
+**What was built:** a multi-stage `Dockerfile` (builder venv → slim runtime,
+non-root `appuser`, healthcheck), `.dockerignore` that keeps `.env`/`.git`/
+tests out of the build context entirely, and `docker-compose.yml` running the
+API beside a `pgvector/pgvector:pg16` Postgres that auto-applies
+`migrations/` on first boot. Verified: image layers contain no secrets
+(`docker history` grep), schema lands in the local DB, and a real claim runs
+end-to-end through the containerized stack against local pgvector.
+
+**The forced refactor:** `db.py` moved from the `supabase-py` client to
+`psycopg3` + a connection pool, addressed by one `DATABASE_URL`. Reason: the
+Supabase client speaks PostgREST (Supabase's hosted REST layer) — a plain
+Postgres container has no such thing, so "compose up a local pgvector" was
+impossible without either running Supabase's whole local stack or talking
+SQL directly. Parameterized SQL through psycopg keeps the same injection
+safety, works identically against local Postgres and Supabase's connection
+string, and drops a heavyweight dependency. Tradeoff: the required env vars
+changed (SUPABASE_URL/SERVICE_ROLE_KEY → DATABASE_URL), and prod now needs
+the Supabase *connection string* (dashboard → Connect) instead of REST keys.
+
+**Key concepts:**
+- **Multi-stage builds:** compilers, pip caches, and build-time layer churn
+  stay in the builder stage; the runtime image gets only the finished venv +
+  code. Smaller image = faster pulls and less attack surface for an
+  internet-facing container.
+- **Non-root containers:** code execution inside the container should land
+  as an unprivileged user — container-escape vulnerabilities are mostly
+  root-only, so USER appuser converts "compromise = host risk" into
+  "compromise = sandboxed nuisance".
+- **Named volumes + ownership (learned the hard way):** a named volume
+  mounted over a path is initialized root-owned unless the image already has
+  that directory with the right owner — the model cache write failed with
+  PermissionError until the Dockerfile pre-created it as appuser.
+- **Dev/prod DB parity:** compose gives dev a database that behaves like
+  prod (same engine, same extension) without touching prod data — the whole
+  point of the local pgvector container.
+
+## 2026-07-08 — Tasks 3.1 + 3.3: eval dataset and scoring harness
+
+**What was built:** `eval/dataset.json` (40 claims: 13 true, 13 false, 7
+mixed, 7 unverifiable, tagged easy/medium/hard, with reference URLs),
+`eval/run_eval.py` (runs claims through the graph — or a deployed API —
+capturing verdicts, per-node latency, LLM calls, token usage), and
+`eval/score_eval.py` (accuracy, 4×4 confusion matrix, per-difficulty
+accuracy, retrieval hit rate against reference domains, cost per verdict,
+optional LLM-as-judge faithfulness sample → `eval/report.md`). A
+`src/truthlayer/telemetry.py` accumulator records real token usage per
+request. NOTE: dataset labels are drafted — per the plan, review each one
+personally before trusting the numbers.
+
+**Key concepts:**
+- **Golden set quality > size:** 5 easy claims would produce 100% accuracy
+  and zero information — the score would measure the dataset, not the
+  system. Mixed/unverifiable claims and deliberately tricky items (Einstein's
+  Nobel, Tesla's founders) are where a fact-checker actually differentiates.
+- **Accuracy is a weak headline:** the confusion matrix matters more —
+  mixed→true confusions are the dangerous failure for a fact-checker (a
+  half-false claim stamped TRUE). Failure examples split misses into
+  retrieval problems vs judgment problems, which have different fixes.
+- **LLM-as-judge and its limits:** using Claude to audit whether rationales
+  follow from cited evidence scales where human review doesn't, but the
+  judge shares blind spots with the judged (same model family), skews
+  agreeable, and here sees URLs, not full chunks. Smoke alarm, not a gauge.
+- **Run/score separation:** the expensive step (API spend) writes raw JSON;
+  scoring is free and re-runnable — so metrics can be recomputed or extended
+  without re-burning credits.
+
+
 ## 2026-07-07 — Tasks 2.5–2.6: FastAPI service, auth, and hardening
 
 **What was built:** `src/truthlayer/api.py` — a FastAPI app exposing
