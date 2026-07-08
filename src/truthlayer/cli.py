@@ -33,43 +33,32 @@ def _configure_logging(verbose: bool) -> None:
 
 
 def run_pipeline(claim: str) -> int:
-    """Run the full fact-checking pipeline for one claim.
+    """Run the agentic fact-checking graph for one claim.
 
-    Returns a process exit code (0 = verdict produced or insufficient
-    evidence reported cleanly; 1 = pipeline error).
+    Returns a process exit code (0 = verdict produced, including honest
+    "unverifiable"; 1 = pipeline error).
     """
     # Imports happen here, after config validation, so a missing env var
     # fails with a clear message before any heavy model loading starts.
-    from truthlayer.ingest import gather_evidence
-    from truthlayer.retrieval import retrieve_evidence
-    from truthlayer.verdict import VerdictParseError, generate_verdict
+    import truthlayer.graph
 
-    logger.info("Stage 1/3: gathering evidence from the web ...")
-    stored = gather_evidence(claim)
-    if stored == 0:
-        print("\nVerdict: UNVERIFIABLE — web search returned no usable evidence.")
-        return 0
-
-    logger.info("Stage 2/3: retrieving the most relevant evidence ...")
-    evidence = retrieve_evidence(claim)
-    if not evidence:
-        print(
-            "\nVerdict: UNVERIFIABLE — no stored evidence was relevant enough "
-            "to the claim (all below similarity threshold)."
-        )
-        return 0
-
-    logger.info("Stage 3/3: generating verdict with Claude ...")
-    try:
-        verdict = generate_verdict(claim, evidence)
-    except VerdictParseError:
-        logger.error("Claude's output could not be parsed into a valid verdict")
-        print("\nERROR: verdict generation failed (unparseable model output). Try again.")
+    state = truthlayer.graph.verify_claim(claim)
+    verdict = state.get("verdict")
+    if verdict is None:
+        logger.error("Graph finished without producing a verdict; errors: %s", state.get("errors"))
+        print("\nERROR: pipeline failed to produce a verdict. Try again.")
         return 1
 
+    sub_claims = state.get("sub_claims", [])
     print(f"\nClaim:      {claim}")
+    if len(sub_claims) > 1:
+        print("Sub-claims checked:")
+        for sc in sub_claims:
+            print(f"  - {sc}")
     print(f"Verdict:    {verdict.verdict.upper()}")
     print(f"Confidence: {verdict.confidence:.0%}")
+    if state.get("low_confidence"):
+        print("            (low confidence — evidence may be incomplete)")
     print(f"Rationale:  {verdict.rationale}")
     if verdict.supporting_sources:
         print("Sources:")
@@ -77,6 +66,8 @@ def run_pipeline(claim: str) -> int:
             print(f"  - {url}")
     else:
         print("Sources:    (none cited)")
+    if state.get("retry_count", 0) > 0:
+        print(f"Retries:    {state['retry_count']} broadened-search retry/retries used")
     return 0
 
 

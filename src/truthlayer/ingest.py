@@ -1,8 +1,14 @@
 """Evidence ingestion: search results → clean text → chunks → embeddings → DB.
 
 Wires together search (Task 1.3), chunking + embedding (Task 1.4), and
-storage (Task 1.2). The total number of chunks stored per claim is capped so
-a single query can never fill the database unboundedly.
+storage (Task 1.2). The total number of chunks stored per query is capped so
+a single request can never fill the database unboundedly.
+
+Phase 2 addition: the graph fans out over sub-claims, so `ingest_for_query`
+takes an explicit search query plus a set of URLs already ingested during
+this request — the same article routinely ranks for several sub-claims of
+one compound claim, and re-chunking it would store duplicate evidence that
+crowds out genuinely distinct sources at retrieval time.
 """
 
 from __future__ import annotations
@@ -30,37 +36,57 @@ def _clean_result_text(result: SearchResult) -> str:
     return content
 
 
-def gather_evidence(claim: str) -> int:
-    """Search the web for a claim and store embedded evidence chunks.
+def ingest_for_query(
+    query: str,
+    claim_query: str,
+    skip_urls: set[str] | None = None,
+) -> tuple[int, list[str]]:
+    """Search the web for `query` and store embedded evidence chunks.
 
-    Pipeline: web search → clean text per page → chunk → cap total chunks →
-    embed in batches → insert into evidence_chunks.
+    Pipeline: web search → skip already-ingested URLs → clean text per page →
+    chunk → cap total chunks → embed in batches → insert.
+
+    Args:
+        query: The search query to run (a sub-claim, or a broadened query).
+        claim_query: The original claim this evidence is being gathered for
+            (stored on every chunk for traceability).
+        skip_urls: URLs already ingested during this request; results from
+            these are skipped to avoid duplicate evidence.
 
     Returns:
-        The number of chunks stored (0 if search found nothing usable).
+        (chunks_stored, newly_ingested_urls)
     """
     settings = get_settings()
-    results = tavily_search(claim)
+    seen = skip_urls or set()
+    results = tavily_search(query)
     if not results:
-        logger.warning("Search returned no usable results for claim: %r", claim)
-        return 0
-    logger.info("Fetched %d pages of candidate evidence", len(results))
+        logger.warning("Search returned no usable results for query: %r", query)
+        return 0, []
+
+    fresh = [r for r in results if r.url not in seen]
+    if len(fresh) < len(results):
+        logger.info("Skipping %d already-ingested URL(s)", len(results) - len(fresh))
+    if not fresh:
+        return 0, []
+    logger.info("Fetched %d new pages of candidate evidence", len(fresh))
 
     chunks: list[str] = []
     source_urls: list[str] = []
-    for result in results:
+    used_urls: list[str] = []
+    for result in fresh:
         text = _clean_result_text(result)
         if not text.strip():
             continue
+        used_urls.append(result.url)
         for chunk in chunk_text(text):
             chunks.append(chunk)
             source_urls.append(result.url)
 
     if not chunks:
         logger.warning("No readable text extracted from any search result")
-        return 0
+        return 0, []
 
-    # Cap per-claim storage so one query can't fill the database unboundedly.
+    # Cap per-query storage so one request can't fill the database unboundedly.
     if len(chunks) > settings.max_chunks_per_claim:
         logger.info(
             "Capping chunks from %d to %d (max_chunks_per_claim)",
@@ -69,7 +95,18 @@ def gather_evidence(claim: str) -> int:
         )
         chunks = chunks[: settings.max_chunks_per_claim]
         source_urls = source_urls[: settings.max_chunks_per_claim]
+        used_urls = [url for url in used_urls if url in set(source_urls)]
 
     logger.info("Embedding %d chunks", len(chunks))
     embeddings = embed_texts(chunks)
-    return insert_chunks(chunks, embeddings, source_urls, claim_query=claim)
+    stored = insert_chunks(chunks, embeddings, source_urls, claim_query=claim_query)
+    return stored, used_urls
+
+
+def gather_evidence(claim: str) -> int:
+    """Single-query ingestion for a claim (the Phase 1 linear-pipeline entry).
+
+    Returns the number of chunks stored (0 if search found nothing usable).
+    """
+    stored, _ = ingest_for_query(claim, claim_query=claim)
+    return stored

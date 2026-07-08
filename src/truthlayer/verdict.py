@@ -117,23 +117,30 @@ def _parse_verdict(raw_text: str) -> Verdict:
         raise VerdictParseError(f"Claude returned unparseable verdict output: {exc}") from exc
 
 
+#: Parse-failure retries per judge pass; the graph-level budget caps the rest.
+DEFAULT_JUDGE_ATTEMPTS = 2
+
+
 def generate_verdict(
     claim: str,
     evidence: list[RetrievedChunk],
     client: anthropic.Anthropic | None = None,
+    max_attempts: int = DEFAULT_JUDGE_ATTEMPTS,
 ) -> Verdict:
     """Ask Claude for a structured verdict on `claim` given `evidence`.
 
-    The total number of API calls is bounded by settings.max_llm_calls_per_claim
-    (a parse failure gets at most that many attempts in total). The client is
-    created with an explicit timeout; SDK-level transport retries are disabled
-    in favor of this loop so the call ceiling is actually enforced.
+    At most `max_attempts` API calls are made (a parse failure gets one more
+    try, then gives up). The client is created with an explicit timeout;
+    SDK-level transport retries are capped so the call ceiling holds.
 
     Args:
         claim: The user's claim text (trusted input, already validated upstream).
         evidence: Retrieved chunks; may be empty, in which case the model is
             still asked and expected to return "unverifiable".
         client: Optional injected Anthropic client (used by tests).
+        max_attempts: Hard cap on Claude calls for this judge pass; callers
+            running under the graph's request-wide budget pass the smaller of
+            this default and their remaining budget.
 
     Raises:
         VerdictParseError: if every attempt produced invalid output.
@@ -148,7 +155,7 @@ def generate_verdict(
 
     user_prompt = build_user_prompt(claim, evidence)
     last_error: VerdictParseError | None = None
-    for attempt in range(1, settings.max_llm_calls_per_claim + 1):
+    for attempt in range(1, max(1, max_attempts) + 1):
         logger.info("Generating verdict (attempt %d)", attempt)
         message = client.messages.create(
             model=settings.anthropic_model,

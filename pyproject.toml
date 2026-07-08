@@ -26,8 +26,9 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
-# The few-shot JSON examples in the judge prompt are deliberately single-line.
+# The few-shot JSON examples in the judge/decompose prompts are deliberately single-line.
 "src/truthlayer/verdict.py" = ["E501"]
+"src/truthlayer/decompose.py" = ["E501"]
 
 [tool.mypy]
 # 3.12+ because numpy's bundled type stubs use the `type` statement.

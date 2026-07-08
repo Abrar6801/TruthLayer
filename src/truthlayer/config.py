@@ -61,8 +61,17 @@ class Settings:
     # 400, not a no-op. Repeatable judge output now comes from the strict JSON
     # schema (verdict.py) plus low effort, not from a temperature knob.
     llm_effort: LLMEffort = "low"
-    # Hard ceiling on Claude calls a single claim can trigger (judge + parse retry).
-    max_llm_calls_per_claim: int = 2
+    # Hard ceiling on Claude calls a single /verify request can trigger across
+    # decomposition, judging, broadening, and parse retries combined. The graph
+    # tracks llm_calls_used in state and every node checks this before calling.
+    max_llm_calls_per_claim: int = 8
+
+    # --- agentic graph (Phase 2) ---
+    # Verdicts below this confidence trigger a broadened-search retry.
+    confidence_threshold: float = 0.6
+    # Hard cap on broaden-and-retry loops; after this the verdict ships with a
+    # low_confidence flag instead of looping forever.
+    max_verdict_retries: int = 2
 
     # --- pipeline tunables ---
     search_max_results: int = 5
@@ -127,6 +136,10 @@ def get_settings() -> Settings:
         max_llm_calls_per_claim=_read_optional_int(
             "MAX_LLM_CALLS_PER_CLAIM", defaults.max_llm_calls_per_claim
         ),
+        confidence_threshold=_read_optional_float(
+            "CONFIDENCE_THRESHOLD", defaults.confidence_threshold
+        ),
+        max_verdict_retries=_read_optional_int("MAX_VERDICT_RETRIES", defaults.max_verdict_retries),
         search_max_results=_read_optional_int("SEARCH_MAX_RESULTS", defaults.search_max_results),
         chunk_size=_read_optional_int("CHUNK_SIZE", defaults.chunk_size),
         chunk_overlap=_read_optional_int("CHUNK_OVERLAP", defaults.chunk_overlap),

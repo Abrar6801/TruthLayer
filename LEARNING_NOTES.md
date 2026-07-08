@@ -1,5 +1,54 @@
 # TruthLayer learning notes
 
+## 2026-07-07 — Tasks 2.1–2.4: the LangGraph agentic pipeline
+
+**What was built:** `src/truthlayer/graph.py` — a LangGraph state machine
+replacing the Phase 1 linear chain — plus `src/truthlayer/decompose.py`
+(claim decomposition + query broadening). Flow: decompose → search_and_embed
+(fan-out over sub-claims, URL-deduped) → retrieve → judge → conditional edge
+that either ends or broadens the search and retries (max 2), with a
+request-wide LLM call budget enforced in state.
+
+**Key concepts:**
+- **State machine vs function chain:** the graph makes branching explicit —
+  the "retry on low confidence" behavior is a declared, testable edge instead
+  of a while-loop tangled into pipeline code. All data flows through one
+  typed `TruthLayerState`, so every intermediate value is inspectable (and
+  traceable in Phase 3).
+- **Claim decomposition:** "Tesla was founded by Elon Musk in 2003" hides two
+  facts, one of which is false (Musk joined later; Eberhard/Tarpenning
+  founded it). Searched as one blob, evidence for the *dominant* half comes
+  back and the false conjunct can ride through. Split into sub-claims, the
+  weak link gets its own search.
+- **Self-critique/reflection pattern:** the judge's own confidence score
+  gates a retry. Crucially, the retry doesn't re-run the same search — a
+  broaden step rewrites the query first, because identical inputs produce
+  identical (weak) evidence.
+- **Why hard caps are load-bearing, not polish:** every loop in an agentic
+  system is a potential infinite loop billed per iteration. Three separate
+  caps here: max 2 retries, max 4 sub-claims, and a request-wide budget of 8
+  LLM calls that every node checks before calling Claude. Past the caps, the
+  verdict ships with an explicit `low_confidence` flag — an honest degraded
+  answer instead of an unbounded bill.
+- **Evidence dedup across sub-claims:** the same Wikipedia page ranks for
+  several sub-claims of one compound claim; ingesting it repeatedly stores
+  duplicate chunks that crowd out genuinely distinct sources at retrieval
+  time. URLs ingested this request are threaded through state and skipped.
+- **Merged retrieval:** retrieval runs against the *original* claim across
+  all evidence gathered for all sub-claims — the judge needs the combined
+  picture, since a compound claim can be exactly half-true.
+
+**Decisions & tradeoffs:**
+- Judge on empty evidence short-circuits to `unverifiable` (confidence 0.1)
+  without an LLM call — the low score routes into the broadened retry
+  naturally, and no tokens are burned asking Claude to say "no evidence".
+- Failed decompose/broaden calls degrade (claim treated as atomic / raw claim
+  reused as query) rather than failing the request.
+- Budget accounting is conservative: a judge pass charges its full attempt
+  allowance whether or not the parse retry fired, so the cap is a true upper
+  bound.
+
+
 ## 2026-07-07 — Fix: `temperature` removed on Claude Sonnet 5
 
 **What happened:** the first live run against a funded API key failed with
