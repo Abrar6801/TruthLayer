@@ -79,17 +79,27 @@ def retrieve_evidence(
     from different models live in different spaces and their similarities are
     meaningless). Results below the similarity threshold are dropped rather
     than padded out to k.
+
+    With reranking enabled (settings.rerank_enabled), this becomes two-stage
+    retrieval: pgvector supplies settings.retrieval_candidates candidates, a
+    cross-encoder re-scores each (claim, chunk) pair, and only the reranked
+    top_k reach the judge. See reranker.py for why the stages divide this way.
     """
     settings = get_settings()
     k = top_k if top_k is not None else settings.retrieval_top_k
     min_similarity = threshold if threshold is not None else settings.similarity_threshold
+    fetch_k = max(k, settings.retrieval_candidates) if settings.rerank_enabled else k
 
     query_embedding = embed_text(claim)
-    chunks = query_nearest(query_embedding, top_k=k, min_similarity=min_similarity)
+    chunks = query_nearest(query_embedding, top_k=fetch_k, min_similarity=min_similarity)
     logger.info(
         "Retrieved %d chunks above similarity threshold %.2f (top-k=%d)",
         len(chunks),
         min_similarity,
-        k,
+        fetch_k,
     )
+    if settings.rerank_enabled and chunks:
+        from truthlayer.reranker import rerank
+
+        chunks = rerank(claim, chunks, top_k=k)
     return chunks

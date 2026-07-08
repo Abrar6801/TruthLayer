@@ -82,6 +82,19 @@ class Settings:
     # Cosine similarity below this is treated as "no relevant evidence".
     similarity_threshold: float = 0.35
 
+    # --- reranking (Phase 4.2) ---
+    # Two-stage retrieval: pgvector fetches `retrieval_candidates` (wide),
+    # a cross-encoder reranks (claim, chunk) pairs, and only the top
+    # `retrieval_top_k` reach the judge. Toggleable for A/B eval runs.
+    rerank_enabled: bool = False
+    rerank_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    retrieval_candidates: int = 20
+
+    # --- concurrency (Phase 4.3) ---
+    # Max simultaneous sub-claim search/fetch cycles. Bounded so a 4-sub-claim
+    # decomposition can't fire unbounded Tavily calls into free-tier limits.
+    search_concurrency: int = 3
+
     # --- network hygiene ---
     http_timeout_seconds: float = 15.0
     http_max_retries: int = 3
@@ -157,6 +170,12 @@ def get_settings() -> Settings:
         similarity_threshold=_read_optional_float(
             "SIMILARITY_THRESHOLD", defaults.similarity_threshold
         ),
+        rerank_enabled=os.environ.get("RERANK_ENABLED", "").lower() in ("1", "true", "yes"),
+        rerank_model_name=os.environ.get("RERANK_MODEL_NAME", defaults.rerank_model_name),
+        retrieval_candidates=_read_optional_int(
+            "RETRIEVAL_CANDIDATES", defaults.retrieval_candidates
+        ),
+        search_concurrency=_read_optional_int("SEARCH_CONCURRENCY", defaults.search_concurrency),
         http_timeout_seconds=_read_optional_float(
             "HTTP_TIMEOUT_SECONDS", defaults.http_timeout_seconds
         ),
