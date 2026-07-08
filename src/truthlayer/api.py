@@ -94,9 +94,10 @@ class VerifyResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Liveness signal."""
+    """Liveness signal; dependencies populated only on ?deep=true."""
 
     status: str = "ok"
+    dependencies: dict[str, str] | None = None
 
 
 class FeedbackRequest(BaseModel):
@@ -159,8 +160,43 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/health", response_model=HealthResponse)
-    async def health() -> HealthResponse:
-        return HealthResponse()
+    async def health(deep: bool = False) -> HealthResponse:
+        """Liveness check; `?deep=true` adds shallow dependency probes.
+
+        Deep checks are reachability probes (DB SELECT 1, HTTPS handshakes to
+        the Anthropic/Tavily endpoints) — not full pipeline runs, so they're
+        cheap enough for a monitor to hit every minute.
+        """
+        if not deep:
+            return HealthResponse()
+
+        import httpx
+
+        from truthlayer.db import get_pool
+
+        deps: dict[str, str] = {}
+
+        def check_db() -> str:
+            try:
+                with get_pool().connection() as conn:
+                    conn.execute("SELECT 1")
+                return "ok"
+            except Exception:
+                return "unreachable"
+
+        async def check_https(name: str, url: str) -> str:
+            try:
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    await client.get(url)
+                return "ok"  # any HTTP response (even 401) proves reachability
+            except httpx.HTTPError:
+                return "unreachable"
+
+        deps["database"] = await asyncio.to_thread(check_db)
+        deps["anthropic"] = await check_https("anthropic", "https://api.anthropic.com/v1/models")
+        deps["tavily"] = await check_https("tavily", "https://api.tavily.com")
+        status = "ok" if all(v == "ok" for v in deps.values()) else "degraded"
+        return HealthResponse(status=status, dependencies=deps)
 
     @app.post("/verify", response_model=VerifyResponse, dependencies=[Depends(_require_api_key)])
     @limiter.limit(settings.verify_rate_limit)
@@ -183,6 +219,23 @@ def create_app() -> FastAPI:
         # The graph is sync (httpx sync + local embedding model); run it on a
         # worker thread so this endpoint doesn't block the event loop.
         state = await asyncio.to_thread(truthlayer.graph.verify_claim, claim)
+
+        # Upstream outage → clear 503 with a human-readable reason, never a
+        # raw 500 or a confidently-wrong verdict built on no evidence.
+        degraded = state.get("degraded")
+        if degraded == "search_unavailable":
+            raise HTTPException(
+                status_code=503,
+                detail="Web search is temporarily unavailable — please try again shortly.",
+                headers={"Retry-After": "60"},
+            )
+        if degraded == "llm_unavailable":
+            raise HTTPException(
+                status_code=503,
+                detail="The verdict service is temporarily unavailable — please try again shortly.",
+                headers={"Retry-After": "60"},
+            )
+
         verdict = state.get("verdict")
         if verdict is None:
             logger.error("Graph produced no verdict; errors: %s", state.get("errors"))

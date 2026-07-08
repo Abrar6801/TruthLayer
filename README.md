@@ -48,14 +48,26 @@ Browser ── Next.js (Vercel) ── /api/verify route handler   [visitor rate
 | Frontend | Next.js 14 App Router | Server-side route handler keeps the service key out of the browser bundle; Vercel free tier |
 | Evals/tracing | LangSmith + custom harness | Per-node traces for debugging the retry loop; the eval harness measures accuracy, latency, and cost per verdict |
 
-## Results
+## Results (measured, not vibes)
 
-Measured on a 40-claim hand-labeled eval set (13 true / 13 false / 7 mixed /
-7 unverifiable, mixed difficulty):
+On a 40-claim hand-labeled eval set (13 true / 13 false / 7 mixed / 7
+unverifiable, mixed difficulty — small enough to be honest about: treat every
+number as ±):
 
-> Baseline and improvement reports live in [`eval/`](eval/) —
-> `baseline_report.md`, `reranking_report.md`, `latency_report.md`. The
-> final numbers are summarized here as Phase 4 lands.
+| Metric | Value | Report |
+|---|---|---|
+| Verdict accuracy | **77.5%** (26/26 on true/false; mixed & unverifiable bleed into "false") | [`eval/baseline_report.md`](eval/baseline_report.md) |
+| Latency after parallelizing sub-claim search | **p50 10.5s (−30%), p95 15.3s (−39%)**; the search stage itself −57% | [`eval/latency_report.md`](eval/latency_report.md) |
+| Cross-encoder reranking | **Honest negative: 77.5% → 75.0%, +1.15s** — chunk-level analysis of why; shipped off by default | [`eval/reranking_report.md`](eval/reranking_report.md) |
+| Semantic cache hit | **~15ms vs 14.9s p50 (~1000×)**, saving ≈$0.0092 + 1-4 searches per hit; 0.97 threshold validated against negation pairs with the real model | [`tests/test_cache.py`](tests/test_cache.py) |
+| Cost per verdict | **≈ $0.0092** (avg 2.02 LLM calls, ~3.4K in / 230 out tokens) | baseline report |
+| Rationale faithfulness (LLM-as-judge, n=8) | 8/8 | baseline report |
+
+The most interesting single result is the reranking negative: the
+cross-encoder promoted text with maximal lexical overlap ("Japanese Everest
+expeditions" for a claim about "Everest… Japan") over evidentially useful
+chunks, flipping a correct MIXED verdict to FALSE — a concrete example of
+relevance-to-text ≠ usefulness-for-judgment.
 
 ## Security posture
 

@@ -58,7 +58,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 def test_health_needs_no_auth(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["dependencies"] is None  # deep probes only run with ?deep=true
 
 
 def test_verify_without_key_is_401(client: TestClient) -> None:

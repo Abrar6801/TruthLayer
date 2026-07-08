@@ -1,5 +1,87 @@
 # TruthLayer learning notes
 
+## 2026-07-08 — Tasks 4.5 + 4.7: streaming, resilience, and the final story
+
+**Streaming (4.5):** `/verify/stream` emits SSE frames per completed graph
+node; the frontend renders a live checklist (sub-claims → source domains →
+confidence) instead of a spinner. Perceived vs actual latency: streaming
+changes zero milliseconds of wall-clock time — it changes feedback
+*frequency*, which is what waiting actually feels like. SSE vs websockets:
+SSE is one-directional server→client push over plain HTTP (perfect for
+"server narrates progress"); websockets buy bidirectionality nobody needs
+here at the cost of upgrade handshakes. Also added: thumbs-up/down feedback
+(migration 003 + /feedback endpoint), env-gated Plausible analytics hook
+(loads only when NEXT_PUBLIC_PLAUSIBLE_DOMAIN is set — a domain name is
+public by definition, so the prefix is correct there).
+
+**Resilience (4.7):** the graph now carries a `degraded` flag — all searches
+failing in a pass marks `search_unavailable`; Claude connection errors mark
+`llm_unavailable`. The route edge finalizes immediately on degradation
+(retrying against a dead dependency just burns budget), the judge
+short-circuits rather than judging stale chunks, and the API maps both to a
+clean 503 with Retry-After — never a raw 500, never a confident verdict
+built on nothing. `/health?deep=true` runs shallow dependency probes
+(SELECT 1 + HTTPS reachability), cheap enough for a 1-minute monitor.
+Outage integration tests simulate each upstream failing entirely.
+
+## Final retrospective — the Phase 1 → 4 arc
+
+Phase 1 built a straight pipeline and the security posture (injection
+defense, secrets hygiene). Phase 2 made it agentic (decompose → retry loop)
+and shippable (FastAPI, Docker, psycopg refactor). Phase 3 made it
+measurable (40-claim golden set, scoring harness) and usable (Next.js
+frontend with the key held server-side). Phase 4 made it defensible: a
+frozen baseline, one optimization that worked (parallelization: p95 −39%),
+one that didn't and got analyzed instead of hidden (reranking), a semantic
+cache with a threshold validated against its own failure mode, and graceful
+degradation for the day an upstream dies.
+
+**Would defend confidently in an interview:** the injection threat model
+and its layered defense; bi- vs cross-encoder mechanics and why reranking
+lost here; the semantic-cache negation problem and how the threshold was
+validated; why rate limiting must exist at both the visitor and service
+layers; the retry loop's three caps and why they're load-bearing; threads
+vs asyncio for this stack; why the baseline had to be frozen first.
+
+**Would review before an interview:** HNSW graph internals beyond
+"incremental vs build-time clustering"; LangGraph's checkpointing/persistence
+features (unused here); calibration methods for self-reported confidence;
+what a statistically serious eval size would be and how to power it.
+
+## Resume bullets (each anchored on a measured number)
+
+- Built an agentic RAG fact-checker (LangGraph, pgvector, Claude) that
+  decomposes compound claims and retries low-confidence verdicts through
+  broadened search — 77.5% verdict accuracy on a hand-labeled eval set,
+  100% on unambiguous true/false claims, at $0.009 per verdict.
+- Cut p95 latency 39% (25.1s → 15.3s) by parallelizing per-sub-claim
+  retrieval across a bounded thread pool and batching embeddings, verified
+  with per-stage latency instrumentation across a frozen baseline.
+- Implemented semantic caching with an embedding-similarity threshold
+  validated against negation/entity-swap near-misses using the production
+  model — cache hits serve in ~15ms vs a 14.9s median pipeline run (~1000×).
+- A/B-evaluated cross-encoder reranking against the frozen baseline;
+  measured a 2.5pp accuracy regression, root-caused it to lexical-overlap
+  promotion at the chunk level, and shipped the feature disabled — with the
+  analysis documented.
+
+## 60-second interview walkthrough
+
+"TruthLayer fact-checks claims: it splits a compound claim into checkable
+sub-claims, searches the web for each in parallel, embeds and stores the
+evidence in pgvector, retrieves the most relevant passages, and has Claude
+return a strict-JSON verdict with citations — and if confidence is low, a
+LangGraph edge loops back through a broadened search, capped at two retries
+and a request-wide LLM budget. The hard decision I'd highlight: reranking.
+Everyone adds a cross-encoder; I measured it against a frozen baseline and
+it *lost* 2.5 points — because my per-claim evidence pools are already
+search-filtered, the reranker had nothing to clean up, and it promoted
+lexically-similar-but-useless text on exactly the mixed claims that matter.
+So it shipped off, with the chunk-level diff in the repo. Results: 77.5%
+accuracy on a 40-claim golden set, p95 down 39% from parallelization,
+~1000× on cache hits, about a cent a verdict."
+
+
 ## 2026-07-08 — Tasks 4.1–4.3: baseline, reranking (negative result), parallelization
 
 **Baseline (4.1), frozen before any optimization:** 77.5% accuracy on the

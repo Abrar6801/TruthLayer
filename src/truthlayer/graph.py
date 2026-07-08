@@ -36,6 +36,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Literal, TypedDict, cast
 
+import anthropic
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -65,6 +66,10 @@ class TruthLayerState(TypedDict, total=False):
     retry_count: int
     llm_calls_used: int  # counted against settings.max_llm_calls_per_claim
     errors: list[str]
+    # Set when an upstream dependency is down: "search_unavailable" (every
+    # search in a pass failed) or "llm_unavailable" (Claude API unreachable).
+    # The API maps this to a clear 503 instead of a raw 500 or a hung request.
+    degraded: str | None
 
 
 def _budget_left(state: TruthLayerState) -> int:
@@ -156,10 +161,14 @@ def _node_search_and_embed(state: TruthLayerState) -> dict[str, Any]:
             logger.error("Embed/store failed: %s", exc)
             errors.append(f"embed_and_store: {exc}")
 
+    # Every single search in this pass failed → the search dependency is down
+    # (one flaky query is normal; total failure is an outage).
+    failed_all = bool(queries) and len(collected) == 0
     return {
         "chunks_stored": state.get("chunks_stored", 0) + stored,
         "ingested_urls": state.get("ingested_urls", []) + new_urls,
         "errors": errors,
+        "degraded": "search_unavailable" if failed_all else state.get("degraded"),
     }
 
 
@@ -176,6 +185,18 @@ def _node_retrieve(state: TruthLayerState) -> dict[str, Any]:
 
 def _node_judge(state: TruthLayerState) -> dict[str, Any]:
     """Judge the claim against the evidence; record confidence for routing."""
+    if state.get("degraded") == "search_unavailable":
+        # Fresh evidence couldn't be gathered at all; don't spend an LLM call
+        # judging whatever stale chunks retrieval happened to find.
+        verdict = Verdict(
+            verdict="unverifiable",
+            confidence=0.0,
+            rationale="Web search is temporarily unavailable; no fresh evidence "
+            "could be gathered for this claim.",
+            supporting_sources=[],
+        )
+        return {"verdict": verdict, "confidence": verdict.confidence}
+
     evidence = state.get("evidence", [])
     if not evidence:
         # No relevant evidence — don't burn an LLM call asking Claude to say
@@ -201,6 +222,22 @@ def _node_judge(state: TruthLayerState) -> dict[str, Any]:
 
     try:
         verdict = generate_verdict(state["claim"], evidence, max_attempts=attempts)
+    except (anthropic.APIConnectionError, anthropic.APIStatusError) as exc:
+        # Claude itself is down/erroring — degrade cleanly instead of 500ing.
+        logger.error("Claude API unavailable during judging: %s", exc)
+        verdict = Verdict(
+            verdict="unverifiable",
+            confidence=0.0,
+            rationale="The verdict service is temporarily unavailable.",
+            supporting_sources=[],
+        )
+        return {
+            "verdict": verdict,
+            "confidence": verdict.confidence,
+            "llm_calls_used": state.get("llm_calls_used", 0) + attempts,
+            "errors": state.get("errors", []) + [f"judge: {type(exc).__name__}"],
+            "degraded": "llm_unavailable",
+        }
     except VerdictParseError as exc:
         logger.error("Judge produced unparseable output: %s", exc)
         verdict = Verdict(
@@ -257,6 +294,10 @@ def _node_broaden(state: TruthLayerState) -> dict[str, Any]:
 def _route_after_judge(state: TruthLayerState) -> Literal["broaden", "finalize"]:
     """Confidence-gated retry edge with hard caps (the anti-infinite-loop gate)."""
     settings = get_settings()
+    if state.get("degraded"):
+        # An upstream outage won't heal within this request — retrying just
+        # burns budget against a dead dependency.
+        return "finalize"
     confident = state.get("confidence", 0.0) >= settings.confidence_threshold
     retries_left = state.get("retry_count", 0) < settings.max_verdict_retries
     if not confident and retries_left and _budget_left(state) >= 1:
