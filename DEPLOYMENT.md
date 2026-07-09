@@ -34,11 +34,15 @@ password if you never saved it) — NOT the service_role key.
 1. render.com → **New** → **Blueprint** → select the `TruthLayer` repo.
    Render reads `render.yaml` and creates `truthlayer-api`.
 2. In the service's **Environment** tab fill in the `sync: false` vars:
-   - `ANTHROPIC_API_KEY`, `TAVILY_API_KEY` — same values as local `.env`
+   - `ANTHROPIC_API_KEY`, `TAVILY_API_KEY`, `OPENAI_API_KEY` — same values as
+     local `.env` (`OPENAI_API_KEY` is for hosted embeddings only, not chat —
+     see `src/truthlayer/embedding.py`)
    - `DATABASE_URL` — the Supabase pooler URI from step 1
    - `ALLOWED_ORIGINS` — leave the placeholder for now; set it after step 3
      to `https://<your-app>.vercel.app`
-3. Deploy. First build takes ~10 min (torch). Verify:
+3. Deploy. First build takes ~10 min (torch is still a build dependency for
+   the optional reranker, even though embeddings no longer load it at
+   runtime). Verify:
    `curl https://truthlayer-api.onrender.com/health` → `{"status":"ok"}`
 4. Copy the generated `TRUTHLAYER_API_KEY` value (Environment tab) — the
    frontend needs it in step 3.

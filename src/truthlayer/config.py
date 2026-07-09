@@ -24,6 +24,7 @@ REQUIRED_VARS = (
     "ANTHROPIC_API_KEY",
     "TAVILY_API_KEY",
     "DATABASE_URL",
+    "OPENAI_API_KEY",
 )
 
 
@@ -47,11 +48,16 @@ class Settings:
     # container. Production: Supabase's connection string — a server-side
     # secret that must never reach client code, logs, or the frontend bundle.
     database_url: str
+    # Hosted embeddings (embedding.py) — see that module's docstring for why
+    # this replaced local sentence-transformers/torch in production.
+    openai_api_key: str
 
     # --- embedding model, locked in with the DB schema (Task 1.2) ---
     # Changing the model means changing the vector(384) column and re-embedding
-    # everything, so these two values must move together.
-    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # everything, so these two values must move together. `dimensions=384` on
+    # the API request truncates OpenAI's native 1536-dim output to match the
+    # existing vector(384) column — no migration needed for this model swap.
+    embedding_model_name: str = "text-embedding-3-small"
     embedding_dim: int = 384
 
     # --- LLM ---
@@ -97,11 +103,18 @@ class Settings:
 
     # --- semantic cache (Phase 4.4) ---
     cache_enabled: bool = True
-    # 0.97 cosine: high enough that paraphrases hit but negations and entity
-    # swaps miss — the catastrophic failure for a fact-checker is serving
-    # "the earth is round"'s verdict for "the earth is flat". Validated by
-    # tests/test_cache.py's near-miss probes with the real embedding model.
-    cache_similarity_threshold: float = 0.97
+    # 0.94 cosine, measured against the REAL production model
+    # (text-embedding-3-small @ 384 dims — see embedding.py). Negation/entity
+    # -swap pairs ("earth is round" vs "earth is flat") score 0.75-0.88 in
+    # this embedding space; realistic near-duplicate resubmissions (typos,
+    # casing, minor rewording) score 0.95-0.98. 0.94 sits in that gap with a
+    # safety margin toward the dangerous side, since serving one claim's
+    # verdict for its near-opposite is the catastrophic failure mode here —
+    # this is NOT the same value the old local model used (0.97); a model
+    # swap invalidates a tuned similarity threshold and requires re-measuring
+    # it, which is exactly why tests/test_cache.py's threshold probes run
+    # against the real API rather than a mock. See LEARNING_NOTES.md.
+    cache_similarity_threshold: float = 0.94
     # Facts drift (officeholders, records, prices). 7 days keeps demo-scale
     # repeat traffic cheap while bounding how stale a served verdict can be.
     cache_ttl_hours: int = 168
@@ -155,11 +168,12 @@ def get_settings() -> Settings:
             f"LLM_EFFORT={llm_effort!r} is not valid; must be one of {_VALID_LLM_EFFORTS}"
         )
 
-    defaults = Settings(anthropic_api_key="", tavily_api_key="", database_url="")
+    defaults = Settings(anthropic_api_key="", tavily_api_key="", database_url="", openai_api_key="")
     return Settings(
         anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
         tavily_api_key=os.environ["TAVILY_API_KEY"],
         database_url=os.environ["DATABASE_URL"],
+        openai_api_key=os.environ["OPENAI_API_KEY"],
         embedding_model_name=os.environ.get("EMBEDDING_MODEL_NAME", defaults.embedding_model_name),
         embedding_dim=_read_optional_int("EMBEDDING_DIM", defaults.embedding_dim),
         anthropic_model=os.environ.get("ANTHROPIC_MODEL", defaults.anthropic_model),

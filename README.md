@@ -31,7 +31,7 @@ Browser ── Next.js (Vercel) ── /api/verify route handler   [visitor rate
    │        │                    LLM call budget)   ▼
    │        └──────────────────────────────── verdict + citations
    │
-   └── every stage: Tavily search · trafilatura extraction · MiniLM local
+   └── every stage: Tavily search · trafilatura extraction · OpenAI hosted
        embeddings · Postgres+pgvector (HNSW, cosine) · Claude judge with
        injection-hardened prompts and strict JSON output
 ```
@@ -42,7 +42,7 @@ Browser ── Next.js (Vercel) ── /api/verify route handler   [visitor rate
 |---|---|---|
 | Orchestration | LangGraph | The confidence-gated retry loop is a declared, testable graph edge instead of a hand-rolled while-loop; typed shared state; per-node tracing |
 | Vector store | Postgres + pgvector | One database for everything; HNSW index stays accurate under continuous inserts (vs IVFFlat's build-time clustering) |
-| Embeddings | sentence-transformers MiniLM-L6 (local) | Free, offline, no rate limits for dev; swap point is one function |
+| Embeddings | OpenAI text-embedding-3-small, truncated to 384 dims | Started local (sentence-transformers) for free/offline dev; swapped to hosted after Render's 512MB free tier couldn't hold torch + a loaded model without hanging `/verify` |
 | Judge LLM | Claude (Sonnet) | Strong grounded-judgment behavior; strict JSON + Pydantic validation gives a hard parse-or-fail boundary |
 | API | FastAPI | Async endpoint keeps the event loop free during 10-30s I/O waits; typed request/response models; free OpenAPI docs |
 | Frontend | Next.js 14 App Router | Server-side route handler keeps the service key out of the browser bundle; Vercel free tier |

@@ -1,5 +1,52 @@
 # TruthLayer learning notes
 
+## 2026-07-09 — Post-launch fix: swap embeddings from local MiniLM to hosted OpenAI
+
+**What and why:** production embeddings moved from a local
+sentence-transformers model to OpenAI's `text-embedding-3-small` (truncated
+to 384 dims via the API's `dimensions` param, so `vector(384)` needed no
+migration). Cause: Render's free tier caps the container at 512MB RAM, and
+importing torch + loading a transformer model inside that budget was
+exhausting memory in production — `/verify*` would hang or 502 while
+`/health` (which never touches the model) stayed instant. Reranking
+(`reranker.py`) still uses sentence-transformers locally, but it's disabled
+by default and lazy-imported, so it never loads in the request path that was
+failing.
+
+**Re-measuring the semantic cache threshold:** a model swap invalidates any
+previously-tuned similarity number, because it's a property of that model's
+embedding geometry, not a universal constant. Re-running `test_cache.py`'s
+threshold probes against the real OpenAI API (opt-in via
+`TRUTHLAYER_LIVE_EMBEDDINGS=1`) showed negation/entity-swap pairs now scoring
+0.75-0.88 (vs MiniLM's different distribution) and realistic near-duplicate
+resubmissions scoring 0.95-0.98 — moving `cache_similarity_threshold` from
+0.97 to 0.94 to sit in that gap, biased toward the dangerous side (a missed
+cache hit just re-runs the pipeline; a false hit serves one claim's verdict
+for its near-opposite).
+
+**Key concepts:**
+- **Matryoshka representation learning:** `text-embedding-3-small` is trained
+  so that truncating its native 1536-dim output to a shorter prefix (384
+  here) still yields a valid, comparable embedding — unlike arbitrarily
+  slicing a normal model's output, which would just discard information
+  unevenly. This is what let the swap skip a schema migration entirely.
+- **Why a threshold is per-model, not per-project:** cosine similarity scores
+  between the same sentence pairs differ across embedding models because
+  each model learns its own geometry; a hardcoded "0.97 means paraphrase"
+  assumption silently breaks the moment the embedding source changes
+  underneath it.
+- **Two independently-gated live test flags:** `TRUTHLAYER_LIVE_LLM` and
+  `TRUTHLAYER_LIVE_EMBEDDINGS` were split apart so re-validating the cache
+  threshold doesn't require Anthropic credentials, and vice versa.
+
+**Decisions & tradeoffs:** kept sentence-transformers in `requirements.txt`
+for the optional reranker rather than dropping it outright — it's local
+experimentation code with a measured negative result already (see
+`eval/reranking_report.md`), not worth ripping out, and it's disabled by
+default so it doesn't reintroduce the memory problem. This does mean the
+Render build still installs torch (~10 min build), even though it's no
+longer on the runtime path that was failing.
+
 ## 2026-07-08 — Tasks 4.5 + 4.7: streaming, resilience, and the final story
 
 **Streaming (4.5):** `/verify/stream` emits SSE frames per completed graph

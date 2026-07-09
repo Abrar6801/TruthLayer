@@ -7,7 +7,9 @@
 #      from your local .env / Supabase dashboard — never commit them).
 #
 # Free-tier note: the service spins down after 15 idle minutes; the first
-# request after that takes ~1 min (cold start + model load).
+# request after that takes up to ~1 min to cold-start. Embeddings are hosted
+# (OpenAI), not a local model, specifically because the free tier's 512MB RAM
+# can't reliably hold a local torch-based embedding model under load.
 
 services:
   - type: web
@@ -20,6 +22,8 @@ services:
         sync: false # set in dashboard
       - key: TAVILY_API_KEY
         sync: false # set in dashboard
+      - key: OPENAI_API_KEY
+        sync: false # set in dashboard — used only for embeddings, not chat
       - key: DATABASE_URL
         sync: false # Supabase → Connect → Session pooler URI (IPv4-compatible)
       - key: TRUTHLAYER_API_KEY

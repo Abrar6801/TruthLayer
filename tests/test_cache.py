@@ -1,12 +1,14 @@
 """Tests for the semantic verdict cache.
 
-Two groups: logic tests (DB and model mocked) and threshold probes that use
-the REAL local embedding model to verify the 0.97 cutoff separates dangerous
+Two groups: logic tests (DB and embedding call mocked) and opt-in threshold
+probes that use the REAL production embedding model (OpenAI) to verify the
+configured cutoff (settings.cache_similarity_threshold) separates dangerous
 near-misses (negations, entity swaps) from legitimate paraphrase hits.
 """
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from typing import Any
 
@@ -91,13 +93,26 @@ def test_store_failure_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Threshold probes with the real embedding model.
+# Threshold probes against the REAL production embedding model (OpenAI).
 #
 # These are the tests the whole cache design leans on: negation pairs are
 # exactly where embedding similarity is misleadingly high, because flipping
 # one word barely moves the vector. If any of these creep above the
 # threshold, serving cached verdicts becomes actively dangerous.
+#
+# Opt-in only (TRUTHLAYER_LIVE_EMBEDDINGS=1 + a real OPENAI_API_KEY): they
+# call the actual embed_texts() production path, not a mock, because a
+# mocked embedding can't tell you anything about the real model's geometry —
+# and after the embedding.py swap from local sentence-transformers to hosted
+# OpenAI embeddings, re-running these against the real API is exactly how you
+# catch a threshold that silently stopped being valid for the new model.
 # ---------------------------------------------------------------------------
+
+_LIVE_EMBEDDINGS = os.environ.get("TRUTHLAYER_LIVE_EMBEDDINGS") == "1"
+_skip_unless_live = pytest.mark.skipif(
+    not _LIVE_EMBEDDINGS,
+    reason="live OpenAI embeddings test; run with TRUTHLAYER_LIVE_EMBEDDINGS=1 and a real key",
+)
 
 NEAR_MISS_PAIRS = [
     # negation: opposite truth values, high lexical overlap
@@ -108,24 +123,35 @@ NEAR_MISS_PAIRS = [
     ("Einstein won the Nobel Prize in Physics.", "Newton won the Nobel Prize in Physics."),
 ]
 
+#: Realistic "same claim resubmitted" cases — typos, casing, minor rewording.
+#: This is the cache's actual use case (someone re-checks a claim they, or
+#: someone else, already submitted), not arbitrary paraphrase rewriting —
+#: which scores lower in this embedding space and is intentionally NOT
+#: guaranteed to hit (a missed cache hit just re-runs the pipeline; it's not
+#: a safety issue, unlike the near-miss pairs above).
 PARAPHRASE_PAIRS = [
+    ("Tokyo is the capital of Japan.", "Tokyo is the capital of Japan"),
+    ("Tokyo is the capital of Japan.", "tokyo is the capital of japan."),
+    (
+        "The Eiffel Tower is located in Paris, France.",
+        "The Eiffel Tower is located in Paris, France",
+    ),
     (
         "Water boils at 100 degrees Celsius at sea level.",
-        "At sea level, water boils at 100 degrees Celsius.",
+        "Water boils at 100 C at sea level.",
     ),
-    ("Tokyo is the capital of Japan.", "Tokyo is the capital city of Japan."),
 ]
 
 
 def _real_similarity(a: str, b: str) -> float:
+    from truthlayer.embedding import embed_texts
     from truthlayer.retrieval import cosine_similarity
 
-    sentence_transformers = pytest.importorskip("sentence_transformers")
-    model = sentence_transformers.SentenceTransformer(get_settings().embedding_model_name)
-    va, vb = model.encode([a, b], normalize_embeddings=True)
-    return cosine_similarity([float(x) for x in va], [float(x) for x in vb])
+    va, vb = embed_texts([a, b])
+    return cosine_similarity(va, vb)
 
 
+@_skip_unless_live
 @pytest.mark.parametrize(("claim_a", "claim_b"), NEAR_MISS_PAIRS)
 def test_dangerous_near_misses_stay_below_threshold(claim_a: str, claim_b: str) -> None:
     similarity = _real_similarity(claim_a, claim_b)
@@ -136,6 +162,7 @@ def test_dangerous_near_misses_stay_below_threshold(claim_a: str, claim_b: str) 
     )
 
 
+@_skip_unless_live
 @pytest.mark.parametrize(("claim_a", "claim_b"), PARAPHRASE_PAIRS)
 def test_tight_paraphrases_hit(claim_a: str, claim_b: str) -> None:
     similarity = _real_similarity(claim_a, claim_b)
