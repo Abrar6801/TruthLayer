@@ -8,6 +8,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { BackendError, verifyClaim } from "@/lib/api";
 import { allowRequest } from "@/lib/rateLimit";
 
+// See app/api/verify/stream/route.ts for why this is needed — same pipeline,
+// same risk of exceeding Vercel's default 10s function timeout.
+export const maxDuration = 60;
+
 const MAX_CLAIM_LENGTH = 1000;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

@@ -6,6 +6,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { allowRequest } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
+// Vercel's default serverless function timeout (10s on Hobby) is shorter
+// than this pipeline's own p50 (~10.5s per eval/baseline_report.md), and far
+// shorter than a cold Render backend (free tier spins down after 15 idle
+// minutes; cold start alone can take 30-60s). 60 is the max allowed on the
+// Hobby plan — raises the ceiling for warm requests; a cold-backend request
+// can still exceed it, which is a real free-tier limitation, not a bug.
+export const maxDuration = 60;
 
 const MAX_CLAIM_LENGTH = 1000;
 
