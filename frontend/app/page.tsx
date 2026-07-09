@@ -9,7 +9,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { VerifyResult } from "@/lib/api";
 
-type Phase = "idle" | "loading" | "done" | "error";
+type Phase = "idle" | "warming" | "loading" | "done" | "error";
 
 interface ProgressState {
   subClaims: string[];
@@ -61,8 +61,13 @@ export default function Home() {
   const [feedbackSent, setFeedbackSent] = useState<"up" | "down" | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Fire-and-forget warmup on mount to reduce cold-start odds.
   useEffect(() => {
-    if (phase === "loading") {
+    fetch("/api/health", { cache: "no-store" }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (phase === "loading" || phase === "warming") {
       const started = Date.now();
       timerRef.current = setInterval(
         () => setElapsed(Math.floor((Date.now() - started) / 1000)),
@@ -77,9 +82,23 @@ export default function Home() {
     };
   }, [phase]);
 
+  /** Poll /api/health until the backend is up, or until we give up (90s). */
+  async function waitForBackend(): Promise<boolean> {
+    for (let i = 0; i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 6_000));
+      try {
+        const r = await fetch("/api/health", { cache: "no-store" });
+        if (r.ok) return true;
+      } catch {
+        // network error — keep polling
+      }
+    }
+    return false;
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (phase === "loading" || claim.trim().length < 3) return;
+    if (phase === "loading" || phase === "warming" || claim.trim().length < 3) return;
     setPhase("loading");
     setProgress(EMPTY_PROGRESS);
     setResult(null);
@@ -88,11 +107,30 @@ export default function Home() {
     setFeedbackSent(null);
 
     try {
-      const response = await fetch("/api/verify/stream", {
+      let response = await fetch("/api/verify/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim: claim.trim() }),
       });
+
+      // On 504, the Render free-tier backend is cold-starting. Wait for it and
+      // retry once automatically rather than failing immediately.
+      if (response.status === 504) {
+        setPhase("warming");
+        const ready = await waitForBackend();
+        if (!ready) {
+          throw new Error(
+            "The backend took too long to start. Please try again in a moment.",
+          );
+        }
+        setPhase("loading");
+        response = await fetch("/api/verify/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ claim: claim.trim() }),
+        });
+      }
+
       if (!response.ok || !response.body) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? `Request failed (${response.status})`);
@@ -176,11 +214,23 @@ export default function Home() {
         />
         <div className="form-row">
           <span className="charcount">{claim.length}/1000</span>
-          <button type="submit" disabled={phase === "loading" || claim.trim().length < 3}>
-            {phase === "loading" ? "Checking…" : "Check this claim"}
+          <button type="submit" disabled={phase === "loading" || phase === "warming" || claim.trim().length < 3}>
+            {phase === "loading" || phase === "warming" ? "Checking…" : "Check this claim"}
           </button>
         </div>
       </form>
+
+      {phase === "warming" && (
+        <div className="card loading" role="status">
+          <div className="spinner" aria-hidden="true" />
+          <p style={{ margin: 0 }}>
+            The backend is starting up (free-tier cold start) — this takes up to
+            60 seconds the first time. Your claim will be checked automatically
+            once it&apos;s ready.
+          </p>
+          <p className="elapsed">{elapsed}s elapsed</p>
+        </div>
+      )}
 
       {phase === "loading" && (
         <div className="card loading" role="status">
