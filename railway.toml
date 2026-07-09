@@ -1,0 +1,12 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "./Dockerfile"
+
+[deploy]
+# Railway injects $PORT; fall back to 8000 for local docker runs.
+startCommand = "uvicorn --factory truthlayer.api:create_app --host 0.0.0.0 --port ${PORT:-8000}"
+healthcheckPath = "/health"
+# Give the container time to build the venv and start on first deploy.
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
