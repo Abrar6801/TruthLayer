@@ -1,5 +1,50 @@
 # TruthLayer learning notes
 
+## 2026-07-16 — Deployment target moved from Render to Google Cloud Run
+
+**What and why:** the API's deployment target changed from Render's free tier
+to Google Cloud Run (DEPLOYMENT.md rewritten around it; `render.yaml` and
+`railway.toml` kept as fallbacks). Render's free tier had caused two distinct
+production failures: 512 MB RAM couldn't hold torch (fixed earlier by hosting
+embeddings), and its ~0.1 vCPU let our own search fan-out starve Render's
+/health probe, which cycled the instance and 502'd in-flight verifies (fixed
+by `SEARCH_CONCURRENCY=1`, committed today — at a real latency cost, since it
+undid the Phase 4.3 parallelization win in production). Cloud Run allocates a
+full vCPU per in-flight request, so parallel search works as designed there,
+and its free tier (2M requests / 180k vCPU-seconds monthly) dwarfs portfolio
+traffic. Also evaluated: Railway (good fit, but $1–5/month after the trial —
+not free), Koyeb (free and never sleeps, but 0.1 vCPU = Render's starvation
+problem again), Fly.io (no free tier for new accounts anymore).
+
+**Key concepts:**
+- **Request-based CPU allocation** — Cloud Run's default model: the container
+  only gets CPU while an HTTP request is in flight; between requests it's
+  throttled to near zero. Perfect for request-shaped work like ours, but it's
+  why background threads that outlive the response would stall there.
+- **Scale-to-zero & cold starts** — `--min-instances 0` means idle costs
+  nothing, and the first request after idle pays image-pull + process-start
+  (~10–30 s here). Our frontend's warmup-retry, built for Render's ~1 min
+  cold starts, absorbs this for free.
+- **Secret Manager vs. env vars** — secrets live in a versioned, IAM-guarded
+  store; `--set-secrets` mounts them into the container as env vars at start.
+  Rotation = add a new version, no redeploy of config files. The runtime
+  service account needs the `secretAccessor` role — that grant is the step
+  everyone forgets.
+- **`--max-instances` as a spend ceiling** — free tiers cap what's *free*,
+  not what you can *spend*; a hard instance cap is what actually bounds the
+  bill under a traffic spike or abuse.
+- **Source deploys (`gcloud run deploy --source .`)** — Cloud Build builds
+  the repo's own Dockerfile remotely and pushes to Artifact Registry; same
+  image contract as Render/Railway, no local docker push choreography.
+
+**Tradeoffs:** Cloud Run needs a billing account on file and more one-time
+CLI ceremony than Render's "connect repo" flow — accepted for a genuinely $0
+runtime and full-vCPU requests. `--memory 1Gi` over 512 Mi: costs nothing at
+this traffic, removes the whole OOM failure class. Kept
+`--allow-unauthenticated` + our own API-key header + slowapi rather than
+Cloud Run IAM auth, because the Vercel server proxy already speaks that
+protocol on every platform.
+
 ## 2026-07-09 — Post-launch fix: swap embeddings from local MiniLM to hosted OpenAI
 
 **What and why:** production embeddings moved from a local
