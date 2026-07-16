@@ -104,9 +104,10 @@ def _node_search_and_embed(state: TruthLayerState) -> dict[str, Any]:
     The network phase (Tavily + page text) is pure I/O with no shared state,
     so sub-claims fan out across a bounded thread pool — the pool size is the
     concurrency limit that keeps a 4-sub-claim decomposition from firing
-    unbounded simultaneous calls into free-tier rate limits. Embedding and
-    the DB insert stay in this thread: the local model isn't guaranteed
-    thread-safe, and merging first turns N small embed batches into one big
+    unbounded simultaneous calls into free-tier rate limits (also tuned down
+    in production, see render.yaml's SEARCH_CONCURRENCY, to avoid starving
+    Render's own health check under peak CPU). Embedding and the DB insert
+    stay in this thread: merging first turns N small embed batches into one big
     efficient one. No LLM calls happen here, so the request budget is
     untouched by concurrency.
     """

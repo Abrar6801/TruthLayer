@@ -32,3 +32,11 @@ services:
         value: https://REPLACE-WITH-YOUR-APP.vercel.app
       - key: VERIFY_RATE_LIMIT
         value: 10/minute
+      - key: SEARCH_CONCURRENCY
+        value: "1"
+        # Default (3, see config.py) fires up to 3 simultaneous search/fetch
+        # threads. On this plan's throttled ~0.1 vCPU, that peak CPU
+        # contention was starving the async event loop enough that Render's
+        # own /health probe missed its 5s timeout mid-request, cycling the
+        # instance and 502ing the in-flight /verify call. Serializing to 1
+        # trades some latency for not competing with the health check.
