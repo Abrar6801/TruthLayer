@@ -24,6 +24,8 @@ export interface VerifyResult {
   low_confidence: boolean;
   retries: number;
   served_from_cache?: boolean;
+  // Permalink id (GET /verdicts/{id}); null when the cache write failed.
+  verdict_id?: string | null;
 }
 
 export class BackendError extends Error {
@@ -59,6 +61,24 @@ export async function verifyClaim(claim: string): Promise<VerifyResult> {
 
   if (!response.ok) {
     // Surface the status, never the backend's internals.
+    throw new BackendError(`Backend responded ${response.status}`, response.status);
+  }
+  return (await response.json()) as VerifyResult;
+}
+
+/** Fetch a stored verdict by permalink id. Server-side only. Null on 404. */
+export async function getVerdict(id: string): Promise<VerifyResult | null> {
+  const response = await fetch(
+    `${requireEnv("TRUTHLAYER_API_URL")}/verdicts/${encodeURIComponent(id)}`,
+    {
+      headers: { "X-API-Key": requireEnv("TRUTHLAYER_API_KEY") },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404 || response.status === 422) {
+    return null; // unknown or malformed id — both render as "not found"
+  }
+  if (!response.ok) {
     throw new BackendError(`Backend responded ${response.status}`, response.status);
   }
   return (await response.json()) as VerifyResult;

@@ -64,8 +64,12 @@ def test_cache_miss_returns_none(fake_db: _FakeDB) -> None:
 
 def test_cache_hit_returns_payload(fake_db: _FakeDB) -> None:
     payload = {"claim": "c", "verdict": "true", "confidence": 0.9}
-    fake_db.hit_row = (payload, "cached claim", 0.99)
-    assert check_cache("some claim") == payload
+    fake_db.hit_row = (payload, "cached claim", 0.99, "11111111-2222-3333-4444-555555555555")
+    result = check_cache("some claim")
+    assert result is not None
+    # The hit carries the ORIGINAL row's permalink id alongside the payload.
+    assert result["verdict_id"] == "11111111-2222-3333-4444-555555555555"
+    assert {k: v for k, v in result.items() if k != "verdict_id"} == payload
 
 
 def test_cache_query_enforces_threshold_and_ttl(fake_db: _FakeDB) -> None:

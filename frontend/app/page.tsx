@@ -27,6 +27,15 @@ const EMPTY_PROGRESS: ProgressState = {
   retrying: false,
 };
 
+// Instant demo claims: all pre-verified in production, so they hit the
+// semantic cache and answer in well under a second — no cold-start or
+// pipeline wait for a first-time visitor (or an interviewer).
+const EXAMPLE_CLAIMS = [
+  "The Great Wall of China is visible from space with the naked eye",
+  "Water boils at 100 degrees Celsius at sea level",
+  "Albert Einstein failed math in school",
+];
+
 const VERDICT_STYLES: Record<VerifyResult["verdict"], { label: string; className: string }> = {
   true: { label: "TRUE", className: "verdict-true" },
   false: { label: "FALSE", className: "verdict-false" },
@@ -59,6 +68,7 @@ export default function Home() {
   const [error, setError] = useState<string>("");
   const [elapsed, setElapsed] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState<"up" | "down" | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fire-and-forget warmup on mount to reduce cold-start odds.
@@ -98,19 +108,24 @@ export default function Home() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (phase === "loading" || phase === "warming" || claim.trim().length < 3) return;
+    await runVerify(claim);
+  }
+
+  async function runVerify(text: string) {
+    if (phase === "loading" || phase === "warming" || text.trim().length < 3) return;
     setPhase("loading");
     setProgress(EMPTY_PROGRESS);
     setResult(null);
     setError("");
     setElapsed(0);
     setFeedbackSent(null);
+    setLinkCopied(false);
 
     try {
       let response = await fetch("/api/verify/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim: claim.trim() }),
+        body: JSON.stringify({ claim: text.trim() }),
       });
 
       // On 504, the Render free-tier backend is cold-starting. Wait for it and
@@ -127,7 +142,7 @@ export default function Home() {
         response = await fetch("/api/verify/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ claim: claim.trim() }),
+          body: JSON.stringify({ claim: text.trim() }),
         });
       }
 
@@ -219,6 +234,25 @@ export default function Home() {
           </button>
         </div>
       </form>
+
+      {phase === "idle" && (
+        <div className="examples">
+          <span className="examples-label">Try one:</span>
+          {EXAMPLE_CLAIMS.map((example) => (
+            <button
+              key={example}
+              type="button"
+              className="example-chip"
+              onClick={() => {
+                setClaim(example);
+                void runVerify(example);
+              }}
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+      )}
 
       {phase === "warming" && (
         <div className="card loading" role="status">
@@ -347,6 +381,20 @@ export default function Home() {
               </div>
             );
           })()}
+
+          {result.verdict_id && (
+            <button
+              type="button"
+              className="share-link"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(`${window.location.origin}/verdict/${result.verdict_id}`)
+                  .then(() => setLinkCopied(true));
+              }}
+            >
+              {linkCopied ? "Link copied!" : "🔗 Copy share link"}
+            </button>
+          )}
 
           <div className="feedback">
             {feedbackSent ? (

@@ -103,6 +103,11 @@ class VerifyResponse(BaseModel):
         description="True when a semantically near-identical claim was verified "
         "recently and this verdict was served from the cache.",
     )
+    verdict_id: str | None = Field(
+        default=None,
+        description="Permalink id: GET /verdicts/{verdict_id} returns this "
+        "verdict again. Null if the cache write failed.",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -266,10 +271,10 @@ def create_app() -> FastAPI:
             low_confidence=state.get("low_confidence", False),
             retries=state.get("retry_count", 0),
         )
-        await asyncio.to_thread(
+        response.verdict_id = await asyncio.to_thread(
             truthlayer.cache.store_verdict,
             claim,
-            response.model_dump(exclude={"served_from_cache"}),
+            response.model_dump(exclude={"served_from_cache", "verdict_id"}),
         )
         return response
 
@@ -299,18 +304,45 @@ def create_app() -> FastAPI:
                 frame = await asyncio.to_thread(next, sync_frames, None)
                 if frame is None:
                     break
-                yield frame
                 if frame.startswith("event: result"):
-                    # Cache the fresh verdict for future near-duplicates.
+                    # Cache the fresh verdict BEFORE emitting, so the frame
+                    # can carry its own permalink id.
                     payload = json.loads(frame.split("data: ", 1)[1])
                     payload.pop("served_from_cache", None)
-                    await asyncio.to_thread(truthlayer.cache.store_verdict, claim, payload)
+                    payload.pop("verdict_id", None)
+                    verdict_id = await asyncio.to_thread(
+                        truthlayer.cache.store_verdict, claim, payload
+                    )
+                    payload["served_from_cache"] = False
+                    payload["verdict_id"] = verdict_id
+                    yield truthlayer.streaming._sse("result", payload)
+                else:
+                    yield frame
 
         return StreamingResponse(
             event_stream(),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.get(
+        "/verdicts/{verdict_id}",
+        response_model=VerifyResponse,
+        dependencies=[Depends(_require_api_key)],
+    )
+    @limiter.limit(settings.verify_rate_limit)
+    async def get_verdict(request: Request, verdict_id: uuid.UUID) -> VerifyResponse:
+        """Fetch a previously issued verdict by its permalink id.
+
+        The uuid.UUID path type is the input validation: anything that isn't
+        a well-formed UUID is rejected by FastAPI before touching the DB.
+        """
+        import truthlayer.cache
+
+        stored = await asyncio.to_thread(truthlayer.cache.get_verdict, str(verdict_id))
+        if stored is None:
+            raise HTTPException(status_code=404, detail="No verdict with that id")
+        return VerifyResponse(**{**stored, "served_from_cache": True})
 
     @app.post("/feedback", status_code=204, dependencies=[Depends(_require_api_key)])
     @limiter.limit(settings.verify_rate_limit)

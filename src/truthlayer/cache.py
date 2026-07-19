@@ -55,7 +55,8 @@ def check_cache(claim: str) -> dict[str, Any] | None:
             """
             SELECT verdict_payload,
                    claim_text,
-                   1 - (embedding <=> %(q)s) AS similarity
+                   1 - (embedding <=> %(q)s) AS similarity,
+                   id
             FROM verified_claims
             WHERE 1 - (embedding <=> %(q)s) >= %(threshold)s
               AND created_at > now() - make_interval(hours => %(ttl)s)
@@ -78,27 +79,54 @@ def check_cache(claim: str) -> dict[str, Any] | None:
         cached_claim[:60],
     )
     result: dict[str, Any] = payload if isinstance(payload, dict) else json.loads(payload)
+    # The permalink points at the ORIGINAL row, so near-duplicate claims all
+    # share one canonical verdict URL.
+    result["verdict_id"] = str(row[3])
     return result
 
 
-def store_verdict(claim: str, payload: dict[str, Any]) -> None:
-    """Store a completed verdict for future near-duplicate claims.
+def store_verdict(claim: str, payload: dict[str, Any]) -> str | None:
+    """Store a completed verdict; returns the new row's id (the permalink id).
 
     Failures are logged and swallowed — a broken cache write must never fail
-    the request that produced a perfectly good verdict.
+    the request that produced a perfectly good verdict — hence `None` on any
+    failure: the verdict simply ships without a shareable link.
     """
     settings = get_settings()
     if not settings.cache_enabled:
-        return
+        return None
     try:
         embedding = embed_text(claim)
         with get_pool().connection() as conn:
-            conn.execute(
+            row = conn.execute(
                 """
                 INSERT INTO verified_claims (claim_text, embedding, verdict_payload)
                 VALUES (%s, %s, %s)
+                RETURNING id
                 """,
                 (claim, Vector(embedding), json.dumps(payload)),
-            )
+            ).fetchone()
+        return str(row[0]) if row else None
     except Exception as exc:
         logger.warning("Cache write failed (non-fatal): %s", exc)
+        return None
+
+
+def get_verdict(verdict_id: str) -> dict[str, Any] | None:
+    """Fetch a stored verdict payload by permalink id, or None if unknown.
+
+    No TTL filter: a shared link should keep working past the cache TTL —
+    freshness matters when *serving new verdicts*, not when reading a
+    historical one (the page shows its verdict as-of its creation).
+    """
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT verdict_payload, id FROM verified_claims WHERE id = %s",
+            (verdict_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    payload = row[0]
+    result: dict[str, Any] = payload if isinstance(payload, dict) else json.loads(payload)
+    result["verdict_id"] = str(row[1])
+    return result
