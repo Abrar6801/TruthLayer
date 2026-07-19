@@ -313,22 +313,40 @@ export default function Home() {
             </details>
           )}
 
-          {result.sources.length > 0 ? (
-            <div className="sources">
-              <h2>Sources</h2>
-              <ul>
-                {result.sources.map((url) => (
-                  <li key={url}>
-                    <a href={url} target="_blank" rel="noopener noreferrer nofollow">
-                      {url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="no-sources">No sources were cited for this verdict.</p>
-          )}
+          {(() => {
+            // Prefer per-stance assessments; fall back to the flat list for
+            // verdicts cached before stances existed.
+            const assessed =
+              result.source_assessments && result.source_assessments.length > 0
+                ? result.source_assessments
+                : result.sources.map((url) => ({ url, stance: undefined as undefined }));
+            if (assessed.length === 0) {
+              return <p className="no-sources">No sources were cited for this verdict.</p>;
+            }
+            const disputes = assessed.filter((a) => a.stance === "disputes").length;
+            const supports = assessed.filter((a) => a.stance === "supports").length;
+            return (
+              <div className="sources">
+                <h2>Sources</h2>
+                {disputes > 0 && (
+                  <p className="disagreement-note">
+                    Sources disagree on this one: {supports} support{supports === 1 ? "s" : ""}{" "}
+                    the verdict, {disputes} dispute{disputes === 1 ? "s" : ""} it.
+                  </p>
+                )}
+                <ul>
+                  {assessed.map((a) => (
+                    <li key={a.url}>
+                      {a.stance && <span className={`stance-badge stance-${a.stance}`}>{a.stance}</span>}
+                      <a href={a.url} target="_blank" rel="noopener noreferrer nofollow">
+                        {a.url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
 
           <div className="feedback">
             {feedbackSent ? (

@@ -157,12 +157,34 @@ def test_generate_verdict_filters_uncited_sources() -> None:
             "verdict": "true",
             "confidence": 0.8,
             "rationale": "ok",
-            "supporting_sources": ["https://source.example", "https://made-up.example"],
+            "source_assessments": [
+                {"url": "https://source.example", "stance": "supports"},
+                {"url": "https://made-up.example", "stance": "supports"},  # not in evidence
+            ],
         }
     )
     client = _FakeAnthropicClient([fabricated])
     verdict = generate_verdict("claim", [_chunk("evidence")], client=client)  # type: ignore[arg-type]
+    assert [a.url for a in verdict.source_assessments] == ["https://source.example"]
     assert verdict.supporting_sources == ["https://source.example"]
+
+
+def test_generate_verdict_derives_supporting_from_stances() -> None:
+    """Disputing/context sources stay in assessments but not in supporting_sources."""
+    payload = json.dumps(
+        {
+            "verdict": "mixed",
+            "confidence": 0.85,
+            "rationale": "sources disagree",
+            "source_assessments": [
+                {"url": "https://source.example", "stance": "disputes"},
+            ],
+        }
+    )
+    client = _FakeAnthropicClient([payload])
+    verdict = generate_verdict("claim", [_chunk("evidence")], client=client)  # type: ignore[arg-type]
+    assert verdict.supporting_sources == []
+    assert verdict.source_assessments[0].stance == "disputes"
 
 
 def test_generate_verdict_bounded_retries() -> None:

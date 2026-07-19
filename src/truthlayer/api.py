@@ -72,6 +72,13 @@ class VerifyRequest(BaseModel):
     )
 
 
+class SourceAssessmentOut(BaseModel):
+    """Per-source stance in the response: how each citation relates to the verdict."""
+
+    url: str
+    stance: str = Field(description="supports | disputes | context")
+
+
 class VerifyResponse(BaseModel):
     """Structured verdict returned by /verify."""
 
@@ -80,6 +87,11 @@ class VerifyResponse(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
     sources: list[str]
+    source_assessments: list[SourceAssessmentOut] = Field(
+        default_factory=list,
+        description="Judge's stance per cited source; empty on verdicts cached "
+        "before this field existed.",
+    )
     sub_claims: list[str]
     low_confidence: bool = Field(
         description="True when the verdict shipped below the confidence threshold "
@@ -247,6 +259,9 @@ def create_app() -> FastAPI:
             confidence=verdict.confidence,
             rationale=verdict.rationale,
             sources=verdict.supporting_sources,
+            source_assessments=[
+                SourceAssessmentOut(url=a.url, stance=a.stance) for a in verdict.source_assessments
+            ],
             sub_claims=state.get("sub_claims", [claim]),
             low_confidence=state.get("low_confidence", False),
             retries=state.get("retry_count", 0),

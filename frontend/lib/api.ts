@@ -6,12 +6,20 @@
 // the browser bundle at build time, where anyone can read them with
 // view-source. Server-only env vars never leave the server process.
 
+export interface SourceAssessment {
+  url: string;
+  stance: "supports" | "disputes" | "context";
+}
+
 export interface VerifyResult {
   claim: string;
   verdict: "true" | "false" | "mixed" | "unverifiable";
   confidence: number;
   rationale: string;
   sources: string[];
+  // Per-source stance; may be absent/empty on verdicts cached before the
+  // field existed, so treat `sources` as the fallback.
+  source_assessments?: SourceAssessment[];
   sub_claims: string[];
   low_confidence: boolean;
   retries: number;

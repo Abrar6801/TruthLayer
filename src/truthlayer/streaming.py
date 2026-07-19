@@ -84,6 +84,10 @@ def stream_verification(claim: str) -> Iterator[str]:
                             "confidence": verdict.confidence,
                             "rationale": verdict.rationale,
                             "sources": verdict.supporting_sources,
+                            "source_assessments": [
+                                {"url": a.url, "stance": a.stance}
+                                for a in verdict.source_assessments
+                            ],
                             "sub_claims": state.get("sub_claims", [claim]),
                             "low_confidence": state.get("low_confidence", False),
                             "retries": state.get("retry_count", 0),

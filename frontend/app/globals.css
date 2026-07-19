@@ -276,3 +276,31 @@ footer {
 .feedback-thanks {
   color: var(--true);
 }
+
+/* Per-source stance badges (supports / disputes / context) */
+.stance-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  margin-right: 0.5rem;
+  color: #fff;
+  vertical-align: middle;
+}
+.stance-supports {
+  background: var(--true);
+}
+.stance-disputes {
+  background: var(--false);
+}
+.stance-context {
+  background: var(--unverifiable);
+}
+.disagreement-note {
+  color: var(--mixed);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0.5rem;
+}
