@@ -1,5 +1,45 @@
 # TruthLayer learning notes
 
+## 2026-07-18 — LAUNCHED: production deploy executed (Cloud Run + Vercel + Supabase)
+
+**What happened:** the full stack went live. API:
+`https://truthlayer-api-760747555557.us-central1.run.app` (Cloud Run,
+project `truthlayer-prod`, us-central1). Frontend:
+`https://truthlayer-azure.vercel.app` (Vercel project `truthlayer`). Smoke
+test: Great Wall claim → FALSE @ 0.95 confidence, 3 sources; repeat request
+served from the semantic cache in ~0.7 s. Migrations 002/003 turned out to be
+already applied in Supabase (the `if not exists` idempotency made re-running
+them a safe no-op — that's the whole point of writing migrations that way).
+
+**Deploy-day lessons (each cost real debugging time):**
+- **`gcloud run deploy --source .` uploads everything** unless a
+  `.gcloudignore` says otherwise. First attempt crashed on a
+  `frontend/node_modules/.bin` shim (WinError 1920) — but the scarier
+  implication was that `.env` would have been in the upload tarball. The
+  committed `.gcloudignore` fixes both; treat it like `.dockerignore`'s
+  sibling and write it before the first source deploy, not after.
+- **Supabase direct vs. pooler hostnames:** the direct
+  `db.<ref>.supabase.co` host is IPv6-only — it didn't even resolve from a
+  typical IPv4 home network, and Cloud Run egress is IPv4-only too. The
+  Session-pooler host (`aws-1-<region>.pooler.supabase.com`, username
+  `postgres.<ref>`) is the IPv4 door. Wrong region/cluster fails with
+  "tenant/user not found", which is how probing found `aws-1-ca-central-1`.
+- **gcloud's comma trap:** `--update-env-vars "A=x,y"` parses the comma as a
+  new KEY=VAL pair and dies. The escape is a leading alternate-delimiter
+  token: `--update-env-vars "^;^A=x,y"`.
+- **Cloud Run URLs are deterministic now:**
+  `https://<service>-<project-number>.<region>.run.app` — no random hash, so
+  the frontend env var could have been set before the deploy even finished.
+- **Windows Smart App Control can eat pre-commit hooks:** detect-secrets
+  started failing with WinError 4551 (blocked executable). `pre-commit clean`
+  + letting it rebuild the hook env produced fresh binaries that passed.
+  Never bypass with `--no-verify`; rebuild instead.
+
+**Still open:** personally review `eval/dataset.json` labels; collect 1–2
+weeks of real traffic, then run `eval/analyze_usage.py` (Task 4.6). Also:
+rotate the Supabase DB password when convenient (it transited a chat
+session during deploy).
+
 ## 2026-07-16 — Deployment target moved from Render to Google Cloud Run
 
 **What and why:** the API's deployment target changed from Render's free tier
