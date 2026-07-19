@@ -77,9 +77,18 @@ def test_claude_outage_returns_clear_503(
     monkeypatch.setattr(
         graph_module,
         "collect_chunks_for_query",
-        lambda query, skip_urls=None: (["chunk"], ["https://s.example"], ["https://s.example"]),
+        lambda query, skip_urls=None: (
+            ["chunk"],
+            ["https://s.example"],
+            ["https://s.example"],
+            [None],
+        ),
     )
-    monkeypatch.setattr(graph_module, "embed_and_store", lambda c, u, claim_query: 1)
+    monkeypatch.setattr(
+        graph_module,
+        "embed_and_store",
+        lambda c, u, claim_query, published_dates=None: 1,
+    )
     monkeypatch.setattr(graph_module, "retrieve_evidence", lambda claim: [chunk])
 
     def claude_down(claim: str, evidence: Any, max_attempts: int = 2) -> Any:

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from typing import Literal
 
 import httpx
@@ -44,12 +46,41 @@ class SearchResult:
 
     `raw_content` is arbitrary internet text — untrusted data, never
     instructions. The `source` tag makes that explicit in the data structure.
+    `published_date` is Tavily's reported publish date as ISO `YYYY-MM-DD`,
+    or None — most non-news pages don't carry one.
     """
 
     url: str
     title: str
     raw_content: str
+    published_date: str | None = None
     source: Literal["untrusted_web"] = field(default="untrusted_web")
+
+
+def _parse_published_date(raw: object) -> str | None:
+    """Normalize Tavily's published date to ISO `YYYY-MM-DD`, else None.
+
+    Tavily variously returns ISO timestamps and RFC-2822 dates depending on
+    the result type; anything unparseable is treated as absent rather than
+    poisoning the pipeline with a bad date.
+    """
+    if not raw or not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+    except ValueError:
+        pass
+    parsed = parsedate_to_datetime_or_none(text)
+    return parsed.date().isoformat() if parsed else None
+
+
+def parsedate_to_datetime_or_none(text: str) -> datetime | None:
+    """RFC-2822 date parsing that returns None instead of raising."""
+    try:
+        return parsedate_to_datetime(text)
+    except (TypeError, ValueError):
+        return None
 
 
 @_retry_on_network_errors
@@ -97,7 +128,12 @@ def tavily_search(query: str, max_results: int | None = None) -> list[SearchResu
             content = str(item.get("raw_content") or item.get("content") or "")
             if url and content.strip():
                 results.append(
-                    SearchResult(url=url, title=str(item.get("title") or ""), raw_content=content)
+                    SearchResult(
+                        url=url,
+                        title=str(item.get("title") or ""),
+                        raw_content=content,
+                        published_date=_parse_published_date(item.get("published_date")),
+                    )
                 )
     logger.info("Search returned %d usable results", len(results))
     return results

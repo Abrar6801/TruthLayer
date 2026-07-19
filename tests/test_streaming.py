@@ -42,9 +42,14 @@ def happy_graph(monkeypatch: pytest.MonkeyPatch) -> None:
             ["chunk"],
             ["https://www.nasa.gov/wall"],
             ["https://www.nasa.gov/wall"],
+            [None],
         ),
     )
-    monkeypatch.setattr(graph_module, "embed_and_store", lambda c, u, claim_query: len(c))
+    monkeypatch.setattr(
+        graph_module,
+        "embed_and_store",
+        lambda c, u, claim_query, published_dates=None: len(c),
+    )
     monkeypatch.setattr(graph_module, "retrieve_evidence", lambda claim: [chunk])
     monkeypatch.setattr(
         graph_module, "generate_verdict", lambda claim, evidence, max_attempts=2: verdict

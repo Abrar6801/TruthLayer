@@ -39,7 +39,7 @@ def _clean_result_text(result: SearchResult) -> str:
 def collect_chunks_for_query(
     query: str,
     skip_urls: set[str] | None = None,
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str], list[str | None]]:
     """The network phase: search → skip known URLs → extract → chunk.
 
     Pure I/O + text processing with no shared state, so the graph can safely
@@ -48,26 +48,28 @@ def collect_chunks_for_query(
     guaranteed thread-safe, and merging first means one big efficient batch.
 
     Returns:
-        (chunks, source_urls, used_urls) — parallel lists plus the distinct
-        URLs that produced text.
+        (chunks, source_urls, used_urls, published_dates) — parallel lists
+        (published_dates entries may be None) plus the distinct URLs that
+        produced text.
     """
     settings = get_settings()
     seen = skip_urls or set()
     results = tavily_search(query)
     if not results:
         logger.warning("Search returned no usable results for query: %r", query)
-        return [], [], []
+        return [], [], [], []
 
     fresh = [r for r in results if r.url not in seen]
     if len(fresh) < len(results):
         logger.info("Skipping %d already-ingested URL(s)", len(results) - len(fresh))
     if not fresh:
-        return [], [], []
+        return [], [], [], []
     logger.info("Fetched %d new pages of candidate evidence for %r", len(fresh), query[:60])
 
     chunks: list[str] = []
     source_urls: list[str] = []
     used_urls: list[str] = []
+    published_dates: list[str | None] = []
     for result in fresh:
         text = _clean_result_text(result)
         if not text.strip():
@@ -76,6 +78,7 @@ def collect_chunks_for_query(
         for chunk in chunk_text(text):
             chunks.append(chunk)
             source_urls.append(result.url)
+            published_dates.append(result.published_date)
 
     # Cap per-query so one request can't fill the database unboundedly.
     if len(chunks) > settings.max_chunks_per_claim:
@@ -86,18 +89,26 @@ def collect_chunks_for_query(
         )
         chunks = chunks[: settings.max_chunks_per_claim]
         source_urls = source_urls[: settings.max_chunks_per_claim]
+        published_dates = published_dates[: settings.max_chunks_per_claim]
         used_urls = [url for url in used_urls if url in set(source_urls)]
-    return chunks, source_urls, used_urls
+    return chunks, source_urls, used_urls, published_dates
 
 
-def embed_and_store(chunks: list[str], source_urls: list[str], claim_query: str) -> int:
+def embed_and_store(
+    chunks: list[str],
+    source_urls: list[str],
+    claim_query: str,
+    published_dates: list[str | None] | None = None,
+) -> int:
     """The compute/storage phase: embed one merged batch and insert it."""
     if not chunks:
         logger.warning("No readable text extracted for %r", claim_query[:60])
         return 0
     logger.info("Embedding %d chunks", len(chunks))
     embeddings = embed_texts(chunks)
-    return insert_chunks(chunks, embeddings, source_urls, claim_query=claim_query)
+    return insert_chunks(
+        chunks, embeddings, source_urls, claim_query=claim_query, published_dates=published_dates
+    )
 
 
 def ingest_for_query(
@@ -112,8 +123,12 @@ def ingest_for_query(
     Returns:
         (chunks_stored, newly_ingested_urls)
     """
-    chunks, source_urls, used_urls = collect_chunks_for_query(query, skip_urls=skip_urls)
-    stored = embed_and_store(chunks, source_urls, claim_query=claim_query)
+    chunks, source_urls, used_urls, published_dates = collect_chunks_for_query(
+        query, skip_urls=skip_urls
+    )
+    stored = embed_and_store(
+        chunks, source_urls, claim_query=claim_query, published_dates=published_dates
+    )
     return stored, used_urls
 
 

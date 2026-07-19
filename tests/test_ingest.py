@@ -16,10 +16,18 @@ def captured_inserts(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     captured: dict[str, Any] = {}
 
     def fake_insert(
-        chunks: list[str], embeddings: list[list[float]], source_urls: list[str], claim_query: str
+        chunks: list[str],
+        embeddings: list[list[float]],
+        source_urls: list[str],
+        claim_query: str,
+        published_dates: list[str | None] | None = None,
     ) -> int:
         captured.update(
-            chunks=chunks, embeddings=embeddings, source_urls=source_urls, claim_query=claim_query
+            chunks=chunks,
+            embeddings=embeddings,
+            source_urls=source_urls,
+            claim_query=claim_query,
+            published_dates=published_dates,
         )
         return len(chunks)
 

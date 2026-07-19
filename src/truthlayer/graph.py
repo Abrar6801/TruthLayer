@@ -116,7 +116,7 @@ def _node_search_and_embed(state: TruthLayerState) -> dict[str, Any]:
     errors = list(state.get("errors", []))
     settings = get_settings()
 
-    collected: list[tuple[str, tuple[list[str], list[str], list[str]]]] = []
+    collected: list[tuple[str, tuple[list[str], list[str], list[str], list[str | None]]]] = []
     if len(queries) <= 1:
         # No fan-out to parallelize; skip the pool overhead.
         for query in queries:
@@ -143,21 +143,28 @@ def _node_search_and_embed(state: TruthLayerState) -> dict[str, Any]:
     collected.sort(key=lambda pair: queries.index(pair[0]))
     merged_chunks: list[str] = []
     merged_urls: list[str] = []
+    merged_dates: list[str | None] = []
     new_urls: list[str] = []
     merged_seen = set(seen)
-    for _, (chunks, source_urls, used_urls) in collected:
+    for _, (chunks, source_urls, used_urls, published_dates) in collected:
         fresh = {u for u in used_urls if u not in merged_seen}
-        for chunk, url in zip(chunks, source_urls, strict=True):
+        for chunk, url, published in zip(chunks, source_urls, published_dates, strict=True):
             if url in fresh:
                 merged_chunks.append(chunk)
                 merged_urls.append(url)
+                merged_dates.append(published)
         new_urls.extend(u for u in used_urls if u in fresh)
         merged_seen.update(fresh)
 
     stored = 0
     if merged_chunks:
         try:
-            stored = embed_and_store(merged_chunks, merged_urls, claim_query=state["claim"])
+            stored = embed_and_store(
+                merged_chunks,
+                merged_urls,
+                claim_query=state["claim"],
+                published_dates=merged_dates,
+            )
         except Exception as exc:
             logger.error("Embed/store failed: %s", exc)
             errors.append(f"embed_and_store: {exc}")

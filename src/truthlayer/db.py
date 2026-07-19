@@ -34,13 +34,15 @@ class RetrievedChunk:
     """An evidence chunk returned by nearest-neighbor search.
 
     `chunk_text` originates from the open web and is untrusted data — it must
-    never be treated as instructions by downstream code.
+    never be treated as instructions by downstream code. `published_date` is
+    ISO `YYYY-MM-DD` when the source page carried one, else None.
     """
 
     chunk_text: str
     source_url: str
     similarity: float
     claim_query: str
+    published_date: str | None = None
 
 
 def _configure(conn: Connection) -> None:
@@ -69,6 +71,7 @@ def insert_chunks(
     embeddings: list[list[float]],
     source_urls: list[str],
     claim_query: str,
+    published_dates: list[str | None] | None = None,
 ) -> int:
     """Insert evidence chunks with their embeddings.
 
@@ -77,30 +80,38 @@ def insert_chunks(
         embeddings: One embedding vector per chunk, same order.
         source_urls: One source URL per chunk, same order.
         claim_query: The claim/search query these chunks were gathered for.
+        published_dates: Optional ISO dates per chunk (None entries allowed);
+            omitting the list stores NULL for every chunk.
 
     Returns:
         The number of rows inserted.
 
     Raises:
-        ValueError: if the three parallel lists differ in length.
+        ValueError: if the parallel lists differ in length.
     """
-    if not (len(chunks) == len(embeddings) == len(source_urls)):
+    if published_dates is None:
+        published_dates = [None] * len(chunks)
+    if not (len(chunks) == len(embeddings) == len(source_urls) == len(published_dates)):
         raise ValueError(
-            f"chunks ({len(chunks)}), embeddings ({len(embeddings)}) and "
-            f"source_urls ({len(source_urls)}) must have the same length"
+            f"chunks ({len(chunks)}), embeddings ({len(embeddings)}), "
+            f"source_urls ({len(source_urls)}) and published_dates "
+            f"({len(published_dates)}) must have the same length"
         )
     if not chunks:
         return 0
 
     rows = [
-        (text, Vector(embedding), url, claim_query)
-        for text, embedding, url in zip(chunks, embeddings, source_urls, strict=True)
+        (text, Vector(embedding), url, claim_query, published)
+        for text, embedding, url, published in zip(
+            chunks, embeddings, source_urls, published_dates, strict=True
+        )
     ]
     with get_pool().connection() as conn, conn.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO evidence_chunks (chunk_text, embedding, source_url, claim_query)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO evidence_chunks
+                (chunk_text, embedding, source_url, claim_query, published_date)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             rows,
         )
@@ -125,7 +136,8 @@ def query_nearest(
             SELECT chunk_text,
                    source_url,
                    1 - (embedding <=> %(q)s) AS similarity,
-                   claim_query
+                   claim_query,
+                   published_date
             FROM evidence_chunks
             WHERE 1 - (embedding <=> %(q)s) >= %(min_sim)s
             ORDER BY embedding <=> %(q)s
@@ -139,6 +151,7 @@ def query_nearest(
             source_url=row[1],
             similarity=float(row[2]),
             claim_query=row[3],
+            published_date=row[4].isoformat() if row[4] is not None else None,
         )
         for row in result
     ]

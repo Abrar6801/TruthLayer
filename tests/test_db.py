@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import date
 from typing import Any
 
 import pytest
@@ -99,13 +100,14 @@ def test_insert_chunks_empty_is_noop(fake_db: _FakeDB) -> None:
 
 
 def test_query_nearest_parses_rows(fake_db: _FakeDB) -> None:
-    fake_db.query_rows = [("evidence", "https://a.example", 0.91, "claim")]
+    fake_db.query_rows = [("evidence", "https://a.example", 0.91, "claim", date(2024, 5, 1))]
 
     chunks = query_nearest([0.1, 0.2], top_k=5, min_similarity=0.3)
 
     assert len(chunks) == 1
     assert chunks[0].chunk_text == "evidence"
     assert chunks[0].similarity == pytest.approx(0.91)
+    assert chunks[0].published_date == "2024-05-01"  # date → ISO string at the boundary
     sql, params = fake_db.executed[0]
     assert "ORDER BY embedding <=>" in sql
     assert params["k"] == 5

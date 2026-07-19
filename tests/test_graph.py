@@ -41,12 +41,14 @@ def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
     def fake_collect(query: str, skip_urls: set[str] | None = None) -> Any:
         rec.ingest_calls.append((query, set(skip_urls or set())))
         url = f"https://{len(rec.ingest_calls)}.example"
-        return [f"chunk from {query}"], [url], [url]
+        return [f"chunk from {query}"], [url], [url], [None]
 
     monkeypatch.setattr(graph_module, "decompose_claim", lambda claim: [f"sub of {claim}"])
     monkeypatch.setattr(graph_module, "collect_chunks_for_query", fake_collect)
     monkeypatch.setattr(
-        graph_module, "embed_and_store", lambda chunks, urls, claim_query: len(chunks)
+        graph_module,
+        "embed_and_store",
+        lambda chunks, urls, claim_query, published_dates=None: len(chunks),
     )
     monkeypatch.setattr(graph_module, "retrieve_evidence", lambda claim: [_chunk()])
     monkeypatch.setattr(graph_module, "broaden_query", lambda claim, prev: rec_broaden(rec, claim))
@@ -178,11 +180,17 @@ def test_concurrent_fanout_dedups_overlapping_urls(
             [f"shared chunk via {query}", f"unique chunk via {query}"],
             [shared, unique],
             [shared, unique],
+            [None, None],
         )
 
     stored_batches: list[list[str]] = []
 
-    def capture_store(chunks: list[str], urls: list[str], claim_query: str) -> int:
+    def capture_store(
+        chunks: list[str],
+        urls: list[str],
+        claim_query: str,
+        published_dates: list[str | None] | None = None,
+    ) -> int:
         stored_batches.append(list(urls))
         return len(chunks)
 
