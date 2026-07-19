@@ -108,6 +108,12 @@ class VerifyResponse(BaseModel):
         description="Permalink id: GET /verdicts/{verdict_id} returns this "
         "verdict again. Null if the cache write failed.",
     )
+    raw_confidence: float | None = Field(
+        default=None,
+        description="The judge's uncalibrated stated confidence. `confidence` "
+        "is this value remapped through the measured calibration curve "
+        "(confidence.py); null when remapping is disabled.",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -271,6 +277,14 @@ def create_app() -> FastAPI:
             low_confidence=state.get("low_confidence", False),
             retries=state.get("retry_count", 0),
         )
+        if settings.confidence_remap_enabled:
+            # Calibrate the DISPLAYED confidence only; the graph's retry gate
+            # already ran against the raw value. Remap before the cache write
+            # so cached and fresh responses agree.
+            from truthlayer.confidence import remap_confidence
+
+            response.raw_confidence = response.confidence
+            response.confidence = remap_confidence(response.confidence)
         response.verdict_id = await asyncio.to_thread(
             truthlayer.cache.store_verdict,
             claim,
@@ -310,6 +324,11 @@ def create_app() -> FastAPI:
                     payload = json.loads(frame.split("data: ", 1)[1])
                     payload.pop("served_from_cache", None)
                     payload.pop("verdict_id", None)
+                    if settings.confidence_remap_enabled:
+                        from truthlayer.confidence import remap_confidence
+
+                        payload["raw_confidence"] = payload["confidence"]
+                        payload["confidence"] = remap_confidence(payload["confidence"])
                     verdict_id = await asyncio.to_thread(
                         truthlayer.cache.store_verdict, claim, payload
                     )

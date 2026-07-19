@@ -1,5 +1,41 @@
 # TruthLayer learning notes
 
+## 2026-07-18 (later) — Closing the measurement loops: directional eval + calibrated confidence
+
+**Directional eval of the taxonomy fix** (`eval/taxonomy_fix_directional.md`):
+re-ran just dataset ids 27–38 (new `--ids` flag on run_eval.py; ~1/3 the
+cost of a full run). Result: **3/12 → 7/12**. The compound-claim rule
+recovered 4 of 5 MIXED failures with no subset regressions; the
+unverifiable rule recovered 0 of 4 — the judge still reads "no evidence
+supports this" as FALSE. Lessons: (1) prompt rules are not equally
+learnable — the mixed rule has a crisp structural trigger (true part +
+false part), while "unfalsifiable by construction" requires a judgment the
+model keeps resolving the other way; (2) two of the four remaining misses
+were already flagged as arguable labels, so the next move is the label
+review, not more prompt-engineering toward a possibly-wrong target;
+(3) implied full-set accuracy ≈87.5% but UNVERIFIED for regressions on the
+28 untested claims — quote 7/12, not 87.5%.
+
+**Calibrated confidence now ships** (`src/truthlayer/confidence.py`):
+displayed confidence is piecewise-linearly remapped through the measured
+reliability anchors (stated 0.95 → shown ~0.79, capped at the top bin's
+measured accuracy). Three design points worth remembering:
+- **Remap at the display boundary only** — the graph's broaden-retry gate
+  still compares RAW confidence to its threshold; feeding it remapped
+  values would silently change retry frequency (= cost) untested.
+- **Preserve the raw signal** (`raw_confidence` in responses and eval
+  records) — once you transform a measurement at the source you can never
+  refit the transform; the anchors are fitted on the OLD prompt and need
+  refitting after the next full eval.
+- **Monotone by construction** — piecewise-linear through sorted anchors
+  can never reorder two verdicts, so remapping changes scale, not ranking.
+
+**Deploy-day bug of the day:** the minted `TRUTHLAYER_API_KEY` happens to
+start with `-`, so `--api-key "$KEY"` parsed as a flag and argparse died
+with "expected one argument" — twice, in background shells where the
+symptom looked like an empty variable. `--api-key="$KEY"` is immune. Any
+generated token can start with a dash; always pass secrets with `=`.
+
 ## 2026-07-18 — Post-launch upgrade session: measurement-driven refinement
 
 Eight upgrades in one session, ordered so measurement came first and code

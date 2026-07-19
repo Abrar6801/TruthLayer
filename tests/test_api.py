@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import truthlayer.graph
+from truthlayer.confidence import remap_confidence
 from truthlayer.config import get_settings
 from truthlayer.verdict import Verdict
 
@@ -84,7 +85,11 @@ def test_verify_happy_path(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["verdict"] == "false"
-    assert body["confidence"] == pytest.approx(0.9)
+    # The response confidence is calibrated (confidence.py); the judge's
+    # stated 0.9 is preserved in raw_confidence.
+    assert body["raw_confidence"] == pytest.approx(0.9)
+    assert body["confidence"] == pytest.approx(remap_confidence(0.9))
+    assert body["confidence"] < 0.9  # measured overconfidence must show
     assert body["sources"] == ["https://s.example"]
     assert body["low_confidence"] is False
 

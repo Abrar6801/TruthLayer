@@ -69,6 +69,8 @@ number as ±):
 | Rationale faithfulness (LLM-as-judge, n=8) | 8/8 | baseline report |
 | Confidence calibration | **Overconfident by ~16 points** (Brier 0.195, ECE 0.165): 34/40 verdicts state ≥0.9 confidence but only 79% of those are right | [`eval/calibration_report.md`](eval/calibration_report.md) |
 | Failure taxonomy | **All 9 baseline misses are judge labeling errors, zero retrieval failures** — compound claims mislabeled FALSE instead of MIXED, unfalsifiable claims FALSE instead of UNVERIFIABLE; drove a targeted judge-prompt fix | [`eval/error_analysis.md`](eval/error_analysis.md) |
+| Taxonomy fix (directional, n=12) | **3/12 → 7/12 on the targeted subset**: 4/5 MIXED failures recovered, 0/4 UNVERIFIABLE — a real half-win that redirects the next iteration to the label-policy question | [`eval/taxonomy_fix_directional.md`](eval/taxonomy_fix_directional.md) |
+| Calibrated confidence | Displayed confidence is now **remapped through the measured reliability curve** (stated 0.95 → shown ~0.79); raw value preserved in `raw_confidence` for refitting | [`src/truthlayer/confidence.py`](src/truthlayer/confidence.py) |
 
 The most interesting single result is the reranking negative: the
 cross-encoder promoted text with maximal lexical overlap ("Japanese Everest
@@ -127,10 +129,11 @@ measurements above rather than intuition:
   sometimes confidently-wrong evidence slips through.
 - **The eval set is 40 claims** — big enough to catch regressions, far too
   small for statistically tight accuracy claims. Treat every number as ±.
-- **Confidence is self-reported** by the judge — and now *measured* to be
-  ~16 points overconfident ([calibration report](eval/calibration_report.md));
-  a prompt-level calibration instruction shipped, but post-hoc remapping
-  hasn't.
+- **Confidence calibration is coarse**: the displayed confidence is remapped
+  through a curve fitted on only 40 claims and on the *previous* judge
+  prompt — directionally right (overconfidence is measured, the cap at 0.79
+  is evidence-based), but the anchors need refitting after the next full
+  eval run.
 - **English-only**, and claims about very recent events depend entirely on
   what Tavily surfaces.
 - **Free-tier latency:** Cloud Run scale-to-zero adds a ~10–30s cold start
