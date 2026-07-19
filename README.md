@@ -3,8 +3,13 @@
 **An agentic RAG fact-checker.** Paste a claim; TruthLayer decomposes it into
 checkable sub-claims, searches the web for evidence, retrieves the most
 relevant passages with vector search, and has Claude render a verdict —
-**true / false / mixed / unverifiable** — with citations, a confidence score,
-and an automatic broadened-search retry when confidence is low.
+**true / false / mixed / unverifiable** — with citations, a per-source
+stance (supports / disputes / context), a confidence score, and an automatic
+broadened-search retry when confidence is low.
+
+**Live demo:** <https://truthlayer-azure.vercel.app> — the example chips
+answer from the semantic cache in under a second; a fresh claim takes
+10–30s (plus a cold start if the backend has been idle).
 
 Built solo as a learning project for the agentic-RAG stack (LangGraph,
 pgvector, FastAPI, Next.js, LangSmith), with the explicit goal of being able
@@ -18,7 +23,7 @@ concepts, decisions, and tradeoffs.
 Browser ── Next.js (Vercel) ── /api/verify route handler   [visitor rate limit,
    │                                │                        holds service key]
    │                                ▼
-   │                        FastAPI /verify (Render, Docker)  [API-key auth,
+   │                        FastAPI /verify (Cloud Run, Docker) [API-key auth,
    │                                │                          rate limit, CORS]
    │                                ▼
    │                        LangGraph state machine
@@ -59,15 +64,44 @@ number as ±):
 | Verdict accuracy | **77.5%** (26/26 on true/false; mixed & unverifiable bleed into "false") | [`eval/baseline_report.md`](eval/baseline_report.md) |
 | Latency after parallelizing sub-claim search | **p50 10.5s (−30%), p95 15.3s (−39%)**; the search stage itself −57% | [`eval/latency_report.md`](eval/latency_report.md) |
 | Cross-encoder reranking | **Honest negative: 77.5% → 75.0%, +1.15s** — chunk-level analysis of why; shipped off by default | [`eval/reranking_report.md`](eval/reranking_report.md) |
-| Semantic cache hit | **~15ms vs 14.9s p50 (~1000×)**, saving ≈$0.0092 + 1-4 searches per hit; 0.97 threshold validated against negation pairs with the real model | [`tests/test_cache.py`](tests/test_cache.py) |
+| Semantic cache hit | **~15ms vs 14.9s p50 (~1000×)**, saving ≈$0.0092 + 1-4 searches per hit; threshold re-measured to 0.94 after the embedding-model swap (a tuned similarity threshold is a per-model constant) | [`tests/test_cache.py`](tests/test_cache.py) |
 | Cost per verdict | **≈ $0.0092** (avg 2.02 LLM calls, ~3.4K in / 230 out tokens) | baseline report |
 | Rationale faithfulness (LLM-as-judge, n=8) | 8/8 | baseline report |
+| Confidence calibration | **Overconfident by ~16 points** (Brier 0.195, ECE 0.165): 34/40 verdicts state ≥0.9 confidence but only 79% of those are right | [`eval/calibration_report.md`](eval/calibration_report.md) |
+| Failure taxonomy | **All 9 baseline misses are judge labeling errors, zero retrieval failures** — compound claims mislabeled FALSE instead of MIXED, unfalsifiable claims FALSE instead of UNVERIFIABLE; drove a targeted judge-prompt fix | [`eval/error_analysis.md`](eval/error_analysis.md) |
 
 The most interesting single result is the reranking negative: the
 cross-encoder promoted text with maximal lexical overlap ("Japanese Everest
 expeditions" for a claim about "Everest… Japan") over evidentially useful
 chunks, flipping a correct MIXED verdict to FALSE — a concrete example of
 relevance-to-text ≠ usefulness-for-judgment.
+
+## Post-launch engineering
+
+Everything below was added after the production launch, driven by the
+measurements above rather than intuition:
+
+- **Error analysis → targeted fix:** reading all 9 failures showed accuracy
+  is judge-bound, not retrieval-bound, so the fix was ordered
+  verdict-boundary decision rules + contrast few-shots in the judge prompt —
+  not a retrieval rebuild (gain unmeasured until the next eval run).
+- **Source credibility + recency:** every evidence chunk now carries a
+  system-assigned domain tier (high / medium / low — scraped content can't
+  influence it) and its publish date; the judge weighs both when sources
+  conflict and discounts verdicts resting only on social/forum evidence.
+- **Per-source stance:** the judge labels each citation supports / disputes /
+  context, and the UI says "3 support, 1 disputes" instead of hiding the
+  losing side of a disagreement.
+- **Hybrid retrieval (shipped disabled):** pgvector + Postgres full-text
+  fused with Reciprocal Rank Fusion, behind `HYBRID_ENABLED=false` until an
+  eval run proves it — the reranking negative earned that policy.
+- **Shareable verdicts:** every verdict gets a permalink
+  (`/verdict/<id>`) served from the semantic-cache table; near-duplicate
+  claims share one canonical URL.
+- **CI/CD:** every push runs lint/type/test for backend + frontend; merges
+  to main build the image in GitHub Actions and deploy to Cloud Run via
+  keyless OIDC (Workload Identity Federation — no service-account key
+  exists anywhere).
 
 ## Security posture
 
@@ -93,12 +127,17 @@ relevance-to-text ≠ usefulness-for-judgment.
   sometimes confidently-wrong evidence slips through.
 - **The eval set is 40 claims** — big enough to catch regressions, far too
   small for statistically tight accuracy claims. Treat every number as ±.
-- **Confidence is self-reported** by the judge, not calibrated probability.
+- **Confidence is self-reported** by the judge — and now *measured* to be
+  ~16 points overconfident ([calibration report](eval/calibration_report.md));
+  a prompt-level calibration instruction shipped, but post-hoc remapping
+  hasn't.
 - **English-only**, and claims about very recent events depend entirely on
   what Tavily surfaces.
-- **Free-tier latency:** cold starts add ~1 min on Render after idle.
-- With more time: calibrated confidence, multilingual support, a claim-type
-  classifier in front of the pipeline, and a larger stratified eval set.
+- **Free-tier latency:** Cloud Run scale-to-zero adds a ~10–30s cold start
+  after idle (masked by the frontend's warmup retry).
+- With more time: post-hoc confidence remapping, multilingual support, a
+  claim-type classifier in front of the pipeline, and a larger stratified
+  eval set.
 
 ## Run it locally
 
@@ -121,7 +160,8 @@ python eval/run_eval.py --tag mytest --limit 5   # real run (spends API credits)
 python eval/score_eval.py eval/results/<file>.json
 ```
 
-Deployment (Render + Vercel + Supabase): see [DEPLOYMENT.md](DEPLOYMENT.md).
+Deployment (Google Cloud Run + Vercel + Supabase): see
+[DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Learning log
 
