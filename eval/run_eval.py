@@ -39,6 +39,30 @@ def load_dataset(path: Path) -> list[dict[str, Any]]:
     return items
 
 
+def parse_id_spec(spec: str) -> set[int]:
+    """Parse an id selection like '27-38' or '1,5,9-12' into a set of ints.
+
+    Exists so a targeted (cheap) re-run — e.g. just the claims a fix aims
+    at — doesn't require re-running the whole paid dataset.
+    """
+    ids: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo_text, hi_text = part.split("-", 1)
+            lo, hi = int(lo_text), int(hi_text)
+            if hi < lo:
+                raise ValueError(f"backwards range in --ids: {part!r}")
+            ids.update(range(lo, hi + 1))
+        else:
+            ids.add(int(part))
+    if not ids:
+        raise ValueError(f"--ids selected nothing: {spec!r}")
+    return ids
+
+
 def run_via_graph(claim: str) -> dict[str, Any]:
     """Run one claim through the graph directly, timing each node."""
     from truthlayer import telemetry
@@ -100,6 +124,9 @@ def run_via_api(claim: str, api_url: str, api_key: str) -> dict[str, Any]:
     return {
         "predicted_verdict": body["verdict"],
         "confidence": body["confidence"],
+        # Uncalibrated judge confidence (present once remapping deployed);
+        # calibration REFITS must use this, not the already-remapped value.
+        "raw_confidence": body.get("raw_confidence"),
         "rationale": body["rationale"],
         "sources": body["sources"],
         "sub_claims": body["sub_claims"],
@@ -118,6 +145,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the TruthLayer eval set.")
     parser.add_argument("--dataset", default=str(Path(__file__).parent / "dataset.json"))
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N claims")
+    parser.add_argument(
+        "--ids", default=None, help="Only run these dataset ids, e.g. '27-38' or '1,5,9-12'"
+    )
     parser.add_argument("--tag", default="run", help="Label for the output filename")
     parser.add_argument("--api-url", default=None, help="Hit a deployed API instead of the graph")
     parser.add_argument("--api-key", default=None, help="X-API-Key for --api-url")
@@ -129,6 +159,9 @@ def main() -> int:
 
     sys.path.insert(0, str(REPO_ROOT / "src"))
     items = load_dataset(Path(args.dataset))
+    if args.ids:
+        wanted = parse_id_spec(args.ids)
+        items = [item for item in items if item["id"] in wanted]
     if args.limit:
         items = items[: args.limit]
 
