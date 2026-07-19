@@ -78,7 +78,9 @@ def check_cache(claim: str) -> dict[str, Any] | None:
         claim[:60],
         cached_claim[:60],
     )
-    result: dict[str, Any] = payload if isinstance(payload, dict) else json.loads(payload)
+    # Copy before annotating: never mutate a dict the driver (or a test
+    # fake) may still hold a reference to.
+    result: dict[str, Any] = dict(payload) if isinstance(payload, dict) else json.loads(payload)
     # The permalink points at the ORIGINAL row, so near-duplicate claims all
     # share one canonical verdict URL.
     result["verdict_id"] = str(row[3])
