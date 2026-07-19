@@ -1,5 +1,69 @@
 # TruthLayer learning notes
 
+## 2026-07-18 — Post-launch upgrade session: measurement-driven refinement
+
+Eight upgrades in one session, ordered so measurement came first and code
+changes followed from what the measurements said. Highlights and concepts:
+
+**1. Confidence calibration (`eval/calibration.py`)** — Brier score (mean
+squared error between stated confidence and correctness; 0.25 = coin-flip
+baseline) and ECE (bucket-weighted |confidence − accuracy|). Finding: the
+judge is ~16 points overconfident, with 34/40 verdicts claiming ≥0.9 but
+only 79% of those correct. Key concept: *accuracy and calibration are
+independent axes* — a model can be right often while its confidence numbers
+mean nothing.
+
+**2. Error analysis (`eval/error_analysis.md`)** — read all 9 failures
+individually. Every single one is a judge *labeling-policy* error (MIXED
+compound claims and UNVERIFIABLE unfalsifiables both collapsed to FALSE);
+zero retrieval failures. Lesson: without this reading, the obvious move
+("improve retrieval to fix accuracy") would have been an expensive no-op.
+The fix that followed was prompt-level: ordered decision rules + contrast
+few-shots.
+
+**3. CI/CD via Workload Identity Federation** — GitHub Actions now deploys
+to Cloud Run on merge to main with *no stored credentials*: the workflow's
+OIDC token (proof of "I am a job running in Abrar6801/TruthLayer") is
+exchanged for short-lived GCP credentials via a WIF provider that is
+attribute-locked to exactly this repo. Concept: keyless auth kills the
+whole leaked-service-account-key failure class; `--max-instances` and IAM
+scoping bound the blast radius of a compromised workflow.
+
+**4. Source credibility tiers + recency** — evidence chunks now carry a
+domain tier (high/medium/low, computed from the URL by our code — scraped
+text can't influence it, which matters: "trust me, I'm Reuters" inside page
+content must not work) and Tavily's publish date (migration 004), with
+`<today>` anchored in the judge prompt because models have no reliable
+sense of the current date.
+
+**5. Per-source stance** — the judge emits supports/disputes/context per
+citation; `supporting_sources` became a derived field. UI shows the
+disagreement explicitly. Concept: schema evolution with backward
+compatibility — old cached payloads must keep validating, so the new field
+defaults empty and the old one is derived, not removed.
+
+**6. Hybrid retrieval (disabled)** — Postgres FTS (stored tsvector +
+GIN index, migration 005) fused with pgvector via Reciprocal Rank Fusion.
+RRF fuses by *rank position* because cosine and ts_rank live on
+incomparable scales; a chunk found by both legs beats either leg's
+favorite. Shipped behind HYBRID_ENABLED=false: the reranker's measured
+negative earned the "no retrieval change ships enabled without an eval"
+policy.
+
+**7. Verdict permalinks + demo chips** — the semantic-cache table was
+already storing every verdict payload keyed by UUID, so permalinks cost one
+RETURNING clause and one GET endpoint. Cache hits return the *original*
+row's id, so near-duplicates share a canonical URL. A subtle bug caught by
+tests: `check_cache` annotated the payload dict in place — mutating a dict
+someone else may hold a reference to is how spooky-action bugs are born;
+copy first.
+
+**8. Eval-cost discipline** — the judge-prompt fix's expected gains are
+explicitly UNMEASURED: a full eval run costs ~200–400 Tavily searches
+(of 1,000/month) plus ~$0.40 Claude. Next session: run
+`eval/run_eval.py --limit` on dataset ids 27–38 first for a cheap
+directional read before a full run.
+
 ## 2026-07-18 — Supabase keepalive via Cloud Scheduler
 
 **What and why:** Supabase's free tier pauses a project after 7 days with no
