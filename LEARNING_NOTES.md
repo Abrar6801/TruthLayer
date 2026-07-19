@@ -1,5 +1,39 @@
 # TruthLayer learning notes
 
+## 2026-07-18 — Supabase keepalive via Cloud Scheduler
+
+**What and why:** Supabase's free tier pauses a project after 7 days with no
+database activity; a paused project makes the first user-facing request fail
+until it restores. Fix: Cloud Scheduler job `supabase-keepalive` (daily
+09:00 UTC, free tier allows 3 jobs) GETs `/health?deep=true`, whose
+dependency probe runs a real `SELECT 1` through the pooler — genuine DB
+activity, so the idle clock never reaches 7 days. Verified via the
+scheduler's AttemptFinished log entry (HTTP 200).
+
+**Key concepts:**
+- **Keepalive pings** — free tiers reclaim idle resources (Supabase pauses,
+  Cloud Run scales to zero); a scheduled synthetic request converts "idle"
+  into "active" at near-zero cost. The trick is pinging something that
+  touches the resource you're protecting: plain `/health` returns without a
+  DB query and would NOT reset Supabase's idle clock — `?deep=true` is
+  what makes it count.
+- **Liveness vs. readiness/deep checks** — `/health` (liveness: is the
+  process up?) is intentionally dependency-free so orchestrators don't
+  restart a healthy app when a dependency blips; `/health?deep=true`
+  (readiness-style: can it actually serve?) probes DB + Anthropic + Tavily.
+  Having both on one endpoint pays off here: the deep variant doubles as the
+  keepalive and a daily full-stack pulse.
+- **Cron syntax** — `0 9 * * *` = minute 0, hour 9, every day (UTC by
+  default in Cloud Scheduler).
+
+**Tradeoffs:** daily is far more frequent than the 7-day limit needs, but
+each ping is one request (~1 s of the free vCPU budget) and doubles as a
+daily cold-start exercise + dependency check. Alternative was a GitHub
+Actions cron hitting the endpoint — works, but Cloud Scheduler keeps the
+whole prod story inside one GCP project and its logs beside the service.
+Note the job also briefly wakes Cloud Run once a day; it does NOT keep it
+warm all day (min-instances stays 0, so cold starts remain for users).
+
 ## 2026-07-18 — LAUNCHED: production deploy executed (Cloud Run + Vercel + Supabase)
 
 **What happened:** the full stack went live. API:

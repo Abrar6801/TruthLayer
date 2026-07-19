@@ -184,5 +184,18 @@ was abandoned.
 - Free tier is per-month: 2M requests, 180k vCPU-seconds, 360k GiB-seconds —
   effectively unreachable at portfolio traffic, but `--max-instances 1` is
   the backstop, not the free tier itself.
-- Supabase pauses after 7 idle days → restores on first query.
+- Supabase pauses after 7 idle days → neutralized by a Cloud Scheduler job
+  (`supabase-keepalive`, daily 09:00 UTC) that hits `/health?deep=true`,
+  whose dependency probe runs a real `SELECT 1` against Supabase. Created
+  with:
+
+  ```bash
+  gcloud scheduler jobs create http supabase-keepalive \
+      --location us-central1 --schedule "0 9 * * *" \
+      --uri "https://truthlayer-api-<project-number>.us-central1.run.app/health?deep=true" \
+      --http-method GET --attempt-deadline 180s
+  ```
+
+  (Cloud Scheduler's free tier includes 3 jobs. The 180 s deadline covers a
+  Cloud Run cold start, so the ping also exercises scale-from-zero daily.)
 - Watch Tavily's 1,000 searches/month when sharing the link publicly.
