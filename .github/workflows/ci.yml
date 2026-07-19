@@ -19,8 +19,10 @@ jobs:
             requirements-dev.txt
 
       - name: Install dependencies
+        # CPU-only torch index, same as the Dockerfile: CI has no GPU and the
+        # default CUDA wheels are ~2GB heavier for nothing.
         run: |
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt -r requirements-dev.txt
           pip install -e .
 
       - name: Lint (ruff)
@@ -36,3 +38,27 @@ jobs:
         # Tests are fully mocked — no API keys are configured in CI, and no
         # secrets should ever be added to this workflow for them.
         run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Type-check (tsc)
+        run: npx tsc --noEmit
+
+      - name: Build (next build)
+        # Catches what tsc alone can't: broken imports, invalid route
+        # exports, and server/client component violations.
+        run: npm run build
