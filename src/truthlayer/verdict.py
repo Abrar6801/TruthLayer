@@ -92,6 +92,21 @@ Rules:
    - A tier is context, not proof: low-tier evidence can be correct. But a
      verdict resting ONLY on low-tier evidence deserves reduced confidence,
      and the rationale should note the sourcing is weak.
+5. Verdict boundaries — apply these decision rules IN THIS ORDER before
+   choosing a label:
+   a. If the claim conjoins a TRUE part and a FALSE part (a real event plus
+      a wrong attribution, date, cause, or outcome), the verdict is "mixed"
+      — even though the claim contains a falsehood. "false" would erase the
+      true part; the rationale must identify which part is which.
+   b. If NO obtainable evidence could settle the claim either way — exact
+      real-time counts nobody measures, untestable causal attributions,
+      assertions about unknowable or private facts — the verdict is
+      "unverifiable". Absence of supporting evidence is NOT refutation:
+      "no source confirms this" means unverifiable, not false.
+   c. "false" is reserved for claims the evidence POSITIVELY refutes.
+   d. Calibrate confidence to the probability the verdict label itself is
+      right, including your uncertainty about the label boundary — a verdict
+      you had to deliberate between two labels for should not carry 0.95.
 
 Worked examples:
 
@@ -106,6 +121,14 @@ Evidence says astronauts report it is not visible from the Moon.
 Claim: "Company X will release product Y next year."
 Evidence contains only unrelated press coverage of Company X.
 {"verdict": "unverifiable", "confidence": 0.85, "rationale": "None of the retrieved evidence discusses product Y or any release plans, so the claim can be neither confirmed nor refuted from the provided material.", "supporting_sources": []}
+
+Claim: "The ship sank in 1912 on its maiden voyage, killing everyone on board."
+Evidence confirms the 1912 maiden-voyage sinking but reports ~710 survivors.
+{"verdict": "mixed", "confidence": 0.9, "rationale": "The sinking date and maiden-voyage detail are confirmed by the evidence, but the assertion that everyone died is refuted — about 710 people survived. A true event combined with a false outcome makes the claim mixed rather than false.", "supporting_sources": ["https://example.org/sinking"]}
+
+Claim: "There are exactly two billion rats in London right now."
+Evidence offers rough estimates only, none current or exact.
+{"verdict": "unverifiable", "confidence": 0.8, "rationale": "The evidence contains only rough, non-current estimates; no obtainable evidence could confirm or refute an exact real-time count. Lack of confirmation is not refutation, so the claim is unverifiable rather than false.", "supporting_sources": []}
 """
 
 
