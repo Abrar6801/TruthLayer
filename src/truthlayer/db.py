@@ -155,3 +155,41 @@ def query_nearest(
         )
         for row in result
     ]
+
+
+def query_keyword(query_text: str, top_k: int) -> list[RetrievedChunk]:
+    """Full-text (lexical) search over stored chunks, for hybrid retrieval.
+
+    `websearch_to_tsquery` parses the claim as ordinary search-engine input —
+    arbitrary user text is safe both as SQL (parameterized) and as tsquery
+    syntax (it never raises on unbalanced quotes/operators the way
+    `to_tsquery` does). The returned `similarity` field carries `ts_rank`,
+    which is NOT on the cosine scale — callers fuse by rank position (RRF),
+    never by comparing these scores to vector similarities.
+    """
+    with get_pool().connection() as conn:
+        result = conn.execute(
+            """
+            SELECT chunk_text,
+                   source_url,
+                   ts_rank(chunk_tsv, query) AS score,
+                   claim_query,
+                   published_date
+            FROM evidence_chunks,
+                 websearch_to_tsquery('english', %(q)s) AS query
+            WHERE chunk_tsv @@ query
+            ORDER BY score DESC
+            LIMIT %(k)s
+            """,
+            {"q": query_text, "k": top_k},
+        ).fetchall()
+    return [
+        RetrievedChunk(
+            chunk_text=row[0],
+            source_url=row[1],
+            similarity=float(row[2]),
+            claim_query=row[3],
+            published_date=row[4].isoformat() if row[4] is not None else None,
+        )
+        for row in result
+    ]

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from truthlayer.retrieval import cosine_similarity, rank_chunks
+from truthlayer.db import RetrievedChunk
+from truthlayer.retrieval import cosine_similarity, rank_chunks, reciprocal_rank_fusion
 
 
 def test_cosine_similarity_identical_vectors() -> None:
@@ -57,3 +58,42 @@ def test_rank_chunks_respects_top_k() -> None:
     candidates = [(f"c{i}", f"https://{i}.example", [1.0, float(i) / 10]) for i in range(10)]
     ranked = rank_chunks(query, candidates, top_k=3, threshold=0.0)
     assert len(ranked) == 3
+
+
+# --- hybrid retrieval: reciprocal rank fusion ---
+
+
+def _rc(text: str, url: str = "https://s.example", sim: float = 0.5) -> RetrievedChunk:
+    return RetrievedChunk(chunk_text=text, source_url=url, similarity=sim, claim_query="c")
+
+
+def test_rrf_agreement_beats_single_list_rank_one() -> None:
+    """A chunk found by both searches outranks a chunk that tops only one."""
+    both = _rc("in both lists")
+    vector_only = _rc("vector's favorite")
+    keyword_only = _rc("keyword's favorite")
+    fused = reciprocal_rank_fusion(
+        [[vector_only, both], [keyword_only, both]],
+        top_k=3,
+    )
+    assert fused[0].chunk_text == "in both lists"
+
+
+def test_rrf_preserves_first_list_chunk_object_for_duplicates() -> None:
+    """The vector leg's object (with its cosine similarity) survives fusion."""
+    vector_version = _rc("same text", sim=0.83)
+    keyword_version = _rc("same text", sim=17.2)  # ts_rank scale, incomparable
+    fused = reciprocal_rank_fusion([[vector_version], [keyword_version]], top_k=1)
+    assert fused[0].similarity == 0.83
+
+
+def test_rrf_respects_top_k_and_orders_by_fused_score() -> None:
+    a, b, c = _rc("a"), _rc("b"), _rc("c")
+    fused = reciprocal_rank_fusion([[a, b, c], [b, a, c]], top_k=2)
+    assert len(fused) == 2
+    # a: 1/61 + 1/62 == b: 1/62 + 1/61 -> tie; c strictly lower either way.
+    assert {ch.chunk_text for ch in fused} == {"a", "b"}
+
+
+def test_rrf_empty_lists_return_empty() -> None:
+    assert reciprocal_rank_fusion([[], []], top_k=5) == []

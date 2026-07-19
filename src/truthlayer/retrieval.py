@@ -19,10 +19,44 @@ import logging
 import math
 
 from truthlayer.config import get_settings
-from truthlayer.db import RetrievedChunk, query_nearest
+from truthlayer.db import RetrievedChunk, query_keyword, query_nearest
 from truthlayer.embedding import embed_text
 
 logger = logging.getLogger(__name__)
+
+#: RRF dampening constant. 60 is the value from the original RRF paper
+#: (Cormack et al. 2009) and the near-universal default: large enough that
+#: rank 1 vs rank 2 doesn't dominate the fusion, small enough that ranks
+#: still matter.
+RRF_K = 60
+
+
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[RetrievedChunk]],
+    top_k: int,
+    k: int = RRF_K,
+) -> list[RetrievedChunk]:
+    """Fuse several rankings of (possibly overlapping) chunks into one.
+
+    Each chunk scores sum(1 / (k + rank)) over the lists it appears in
+    (rank is 1-based). Fusing by *position* instead of score matters because
+    the input scores live on incomparable scales — cosine similarity in
+    [-1, 1] vs ts_rank's unbounded scale — while ranks are always comparable.
+    A chunk found by BOTH searches beats a chunk found by one, which is
+    exactly the agreement signal hybrid retrieval is after.
+
+    The chunk object kept for a duplicate is the one from the earliest list
+    (vector first by convention, so the cosine `similarity` survives fusion).
+    """
+    scores: dict[tuple[str, str], float] = {}
+    keepers: dict[tuple[str, str], RetrievedChunk] = {}
+    for ranked in ranked_lists:
+        for rank, chunk in enumerate(ranked, start=1):
+            key = (chunk.chunk_text, chunk.source_url)
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+            keepers.setdefault(key, chunk)
+    fused = sorted(keepers, key=lambda key: scores[key], reverse=True)
+    return [keepers[key] for key in fused[:top_k]]
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -88,7 +122,8 @@ def retrieve_evidence(
     settings = get_settings()
     k = top_k if top_k is not None else settings.retrieval_top_k
     min_similarity = threshold if threshold is not None else settings.similarity_threshold
-    fetch_k = max(k, settings.retrieval_candidates) if settings.rerank_enabled else k
+    wide = settings.rerank_enabled or settings.hybrid_enabled
+    fetch_k = max(k, settings.retrieval_candidates) if wide else k
 
     query_embedding = embed_text(claim)
     chunks = query_nearest(query_embedding, top_k=fetch_k, min_similarity=min_similarity)
@@ -98,6 +133,13 @@ def retrieve_evidence(
         min_similarity,
         fetch_k,
     )
+    if settings.hybrid_enabled:
+        # Lexical leg: exact matches on names/numbers/phrases that embeddings
+        # blur. No cosine floor applies — a keyword hit earns its seat through
+        # the fusion, where agreement with the vector leg is what promotes it.
+        keyword_chunks = query_keyword(claim, top_k=fetch_k)
+        logger.info("Hybrid: %d keyword chunks; fusing with RRF", len(keyword_chunks))
+        chunks = reciprocal_rank_fusion([chunks, keyword_chunks], top_k=k)
     if settings.rerank_enabled and chunks:
         from truthlayer.reranker import rerank
 

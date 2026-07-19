@@ -101,6 +101,14 @@ class Settings:
     # decomposition can't fire unbounded Tavily calls into free-tier limits.
     search_concurrency: int = 3
 
+    # --- hybrid retrieval (post-launch) ---
+    # Fuse pgvector cosine ranking with Postgres full-text (ts_rank) via
+    # Reciprocal Rank Fusion. Ships DISABLED, same policy as the reranker:
+    # a retrieval change is enabled only after an eval run shows it helps —
+    # the reranker taught us plausible-sounding retrieval upgrades can
+    # measure negative. Requires migration 005.
+    hybrid_enabled: bool = False
+
     # --- semantic cache (Phase 4.4) ---
     cache_enabled: bool = True
     # 0.94 cosine, measured against the REAL production model
@@ -201,6 +209,7 @@ def get_settings() -> Settings:
             "RETRIEVAL_CANDIDATES", defaults.retrieval_candidates
         ),
         search_concurrency=_read_optional_int("SEARCH_CONCURRENCY", defaults.search_concurrency),
+        hybrid_enabled=os.environ.get("HYBRID_ENABLED", "").lower() in ("1", "true", "yes"),
         cache_enabled=os.environ.get("CACHE_ENABLED", "true").lower() in ("1", "true", "yes"),
         cache_similarity_threshold=_read_optional_float(
             "CACHE_SIMILARITY_THRESHOLD", defaults.cache_similarity_threshold
