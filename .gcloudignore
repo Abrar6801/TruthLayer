@@ -1,0 +1,19 @@
+# Limits what `gcloud run deploy --source .` uploads to Cloud Build.
+# The Dockerfile only COPYies requirements.txt, pyproject.toml, and src/ —
+# everything else is dead weight, and two entries are load-bearing:
+# .env* keeps local secrets off the wire entirely, and frontend/ contains
+# node_modules shims that crash gcloud's uploader on Windows (WinError 1920).
+.git/
+.gcloudignore
+.venv/
+.env*
+frontend/
+node_modules/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+eval/
+tests/
+docs/
+*.md

@@ -133,11 +133,14 @@ Flag rationale (the interview-answer version):
   and parallel search fan-out works as designed.
 
 First build takes ~10 min (torch is still a build dependency for the optional
-reranker). The command prints the service URL, shaped like
-`https://truthlayer-api-<hash>-uc.a.run.app`. Verify:
+reranker). `.gcloudignore` limits the upload to what the Dockerfile actually
+builds from — critically it excludes `.env*` (secrets stay off the wire) and
+`frontend/` (whose node_modules shims crash gcloud's Windows uploader). The
+command prints the service URL, shaped like
+`https://truthlayer-api-<project-number>.us-central1.run.app`. Verify:
 
 ```bash
-curl https://truthlayer-api-<hash>-uc.a.run.app/health   # → {"status":"ok"}
+curl https://truthlayer-api-<project-number>.us-central1.run.app/health   # → {"status":"ok"}
 ```
 
 ### Alternative: Render / Railway (previous targets)
