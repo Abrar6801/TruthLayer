@@ -1,19 +1,17 @@
-"""Evidence gathering: web search via Tavily and page fetching/extraction.
+"""Evidence gathering: web search via Tavily and text extraction.
 
-Everything this module returns came from the open internet. Every result is
-tagged `source="untrusted_web"` so downstream code (and downstream *prompts*)
-can never confuse scraped text with trusted instructions. This matters for
-this project specifically: a fact-checker deliberately ingests arbitrary web
-pages, which is exactly the delivery mechanism for prompt injection.
+Everything this module returns came from the open internet — untrusted data,
+never instructions. This matters for this project specifically: a
+fact-checker deliberately ingests arbitrary web pages, which is exactly the
+delivery mechanism for prompt injection.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-from typing import Literal
 
 import httpx
 import trafilatura
@@ -45,16 +43,14 @@ class SearchResult:
     """A candidate evidence page returned by web search.
 
     `raw_content` is arbitrary internet text — untrusted data, never
-    instructions. The `source` tag makes that explicit in the data structure.
-    `published_date` is Tavily's reported publish date as ISO `YYYY-MM-DD`,
-    or None — most non-news pages don't carry one.
+    instructions. `published_date` is Tavily's reported publish date as ISO
+    `YYYY-MM-DD`, or None — most non-news pages don't carry one.
     """
 
     url: str
     title: str
     raw_content: str
     published_date: str | None = None
-    source: Literal["untrusted_web"] = field(default="untrusted_web")
 
 
 def _parse_published_date(raw: object) -> str | None:
@@ -71,14 +67,8 @@ def _parse_published_date(raw: object) -> str | None:
         return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
     except ValueError:
         pass
-    parsed = parsedate_to_datetime_or_none(text)
-    return parsed.date().isoformat() if parsed else None
-
-
-def parsedate_to_datetime_or_none(text: str) -> datetime | None:
-    """RFC-2822 date parsing that returns None instead of raising."""
     try:
-        return parsedate_to_datetime(text)
+        return parsedate_to_datetime(text).date().isoformat()
     except (TypeError, ValueError):
         return None
 
@@ -137,23 +127,6 @@ def tavily_search(query: str, max_results: int | None = None) -> list[SearchResu
                 )
     logger.info("Search returned %d usable results", len(results))
     return results
-
-
-@_retry_on_network_errors
-def fetch_page(url: str) -> str:
-    """Fetch a page's raw HTML with a hard timeout and bounded retries.
-
-    Used as a fallback when a search result comes back without raw content.
-    """
-    settings = get_settings()
-    response = httpx.get(
-        url,
-        timeout=settings.http_timeout_seconds,
-        follow_redirects=True,
-        headers={"User-Agent": "TruthLayer/0.1 (fact-checking research tool)"},
-    )
-    response.raise_for_status()
-    return response.text
 
 
 def extract_text(raw_html: str) -> str:

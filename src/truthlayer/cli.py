@@ -12,13 +12,9 @@ import argparse
 import logging
 import sys
 
-from truthlayer.config import ConfigError, get_settings
+from truthlayer.config import MAX_CLAIM_LENGTH, ConfigError, get_settings
 
 logger = logging.getLogger("truthlayer")
-
-#: Claims longer than this are rejected: the pipeline is designed for short,
-#: checkable statements, and an unbounded "claim" is an abuse vector.
-MAX_CLAIM_LENGTH = 1000
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -28,7 +24,7 @@ def _configure_logging(verbose: bool) -> None:
         datefmt="%H:%M:%S",
     )
     # Third-party libraries are chatty at INFO; keep the console readable.
-    for noisy in ("httpx", "httpcore", "sentence_transformers", "urllib3"):
+    for noisy in ("httpx", "httpcore", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 

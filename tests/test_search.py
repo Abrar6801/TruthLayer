@@ -1,4 +1,4 @@
-"""Tests for web search, page fetching, and text extraction — all HTTP mocked."""
+"""Tests for web search and text extraction — all HTTP mocked."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-from truthlayer.search import SearchResult, extract_text, fetch_page, tavily_search
+from truthlayer.search import extract_text, tavily_search
 
 
 class _FakeResponse:
@@ -48,37 +48,33 @@ def test_tavily_search_parses_results(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["timeout"] is not None  # explicit timeout is always set
 
 
-def test_search_results_tagged_untrusted() -> None:
-    result = SearchResult(url="https://x.example", title="t", raw_content="c")
-    assert result.source == "untrusted_web"
-
-
-def test_fetch_page_retries_then_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tavily_search_retries_then_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
 
     def always_timeout(url: str, **kwargs: Any) -> _FakeResponse:
         calls["count"] += 1
         raise httpx.ConnectTimeout("simulated timeout")
 
-    monkeypatch.setattr(httpx, "get", always_timeout)
+    monkeypatch.setattr(httpx, "post", always_timeout)
 
     with pytest.raises(httpx.ConnectTimeout):
-        fetch_page("https://slow.example")
+        tavily_search("some claim")
     assert calls["count"] == 3  # bounded retries, then gives up
 
 
-def test_fetch_page_recovers_after_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tavily_search_recovers_after_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
+    payload = {"results": [{"url": "https://a.example", "title": "A", "raw_content": "ok"}]}
 
     def flaky(url: str, **kwargs: Any) -> _FakeResponse:
         calls["count"] += 1
         if calls["count"] < 2:
             raise httpx.ConnectError("simulated connection reset")
-        return _FakeResponse(text="<html><body>ok</body></html>")
+        return _FakeResponse(json_data=payload)
 
-    monkeypatch.setattr(httpx, "get", flaky)
+    monkeypatch.setattr(httpx, "post", flaky)
 
-    assert "ok" in fetch_page("https://flaky.example")
+    assert tavily_search("some claim")[0].raw_content == "ok"
     assert calls["count"] == 2
 
 

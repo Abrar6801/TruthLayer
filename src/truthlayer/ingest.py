@@ -4,11 +4,12 @@ Wires together search (Task 1.3), chunking + embedding (Task 1.4), and
 storage (Task 1.2). The total number of chunks stored per query is capped so
 a single request can never fill the database unboundedly.
 
-Phase 2 addition: the graph fans out over sub-claims, so `ingest_for_query`
-takes an explicit search query plus a set of URLs already ingested during
-this request — the same article routinely ranks for several sub-claims of
-one compound claim, and re-chunking it would store duplicate evidence that
-crowds out genuinely distinct sources at retrieval time.
+Phase 2 addition: the graph fans out over sub-claims, so
+`collect_chunks_for_query` takes an explicit search query plus a set of URLs
+already ingested during this request — the same article routinely ranks for
+several sub-claims of one compound claim, and re-chunking it would store
+duplicate evidence that crowds out genuinely distinct sources at retrieval
+time.
 """
 
 from __future__ import annotations
@@ -109,33 +110,3 @@ def embed_and_store(
     return insert_chunks(
         chunks, embeddings, source_urls, claim_query=claim_query, published_dates=published_dates
     )
-
-
-def ingest_for_query(
-    query: str,
-    claim_query: str,
-    skip_urls: set[str] | None = None,
-) -> tuple[int, list[str]]:
-    """Search the web for `query` and store embedded evidence chunks.
-
-    Sequential convenience wrapper over collect + embed/store.
-
-    Returns:
-        (chunks_stored, newly_ingested_urls)
-    """
-    chunks, source_urls, used_urls, published_dates = collect_chunks_for_query(
-        query, skip_urls=skip_urls
-    )
-    stored = embed_and_store(
-        chunks, source_urls, claim_query=claim_query, published_dates=published_dates
-    )
-    return stored, used_urls
-
-
-def gather_evidence(claim: str) -> int:
-    """Single-query ingestion for a claim (the Phase 1 linear-pipeline entry).
-
-    Returns the number of chunks stored (0 if search found nothing usable).
-    """
-    stored, _ = ingest_for_query(claim, claim_query=claim)
-    return stored

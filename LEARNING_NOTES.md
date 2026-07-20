@@ -1,5 +1,59 @@
 # TruthLayer learning notes
 
+## 2026-07-19 — Dead-code audit: −520 lines, −1 heavyweight dependency
+
+Ran a repo-wide over-engineering audit and applied the cuts: net **−520
+lines** (+105/−625) and **sentence-transformers/torch removed** from
+requirements (the largest thing in the Docker image, kept alive solely by a
+feature we measured as harmful). All 113 tests pass; mypy/ruff/black clean.
+
+**What was cut and why:**
+- **Reranker (`reranker.py` + tests + 3 config fields + torch dep)** — our
+  own eval (`eval/reranking_report.md`) measured it *negative*; it shipped
+  disabled. A disabled feature that failed its eval isn't optionality, it's
+  inventory. Git history is the archive — "built it, measured it, deleted
+  it" is the stronger portfolio story.
+- **Hybrid retrieval (query_keyword, RRF, `hybrid_enabled`)** — shipped
+  disabled pending an eval that was never scheduled. Same policy as the
+  reranker, applied honestly: no measurement, no code. Migration 005 stays
+  (an applied migration is history, not code — the unused `chunk_tsv`
+  column in prod is harmless).
+- **Test-only production code (`rank_chunks`, `cosine_similarity`,
+  `fetch_page`, `ingest_for_query`, `gather_evidence`)** — code whose only
+  callers are its own tests isn't covered, it's self-licking. The retry
+  tests were repointed at `tavily_search`, the path production actually
+  takes; ingest tests now drive `collect_chunks_for_query` +
+  `embed_and_store`, the exact two calls the graph node makes.
+- **`np.interp` replaced 18 hand-rolled lines** in `confidence.py` — numpy
+  was already pinned; it interpolates AND clamps out-of-range inputs to the
+  end anchors in one call.
+- **`confidence_remap_enabled` kill switch deleted** — a flag nobody sets
+  guarding a pure display transform is dead config; reverting means editing
+  the anchors.
+- **One shared `result_payload()` in graph.py** — /verify and the SSE
+  result frame were hand-building the same dict; duplicated payload shapes
+  drift apart silently, a shared builder can't.
+
+**Key concepts:**
+- **YAGNI applied to *measured* features**: the usual YAGNI argument is
+  about speculative future needs; here the evals gave something stronger —
+  empirical evidence the code shouldn't run. Config toggles are for A/B
+  measurement windows, not permanent residency.
+- **Test-only code is a coverage illusion**: a function tested to 100% but
+  never called in production adds maintenance cost and zero safety. The fix
+  is repointing tests at the real call path, not deleting the tests.
+- **Migrations are a ledger, not code**: you delete dead *code* freely, but
+  an applied migration file describes what already happened to the prod
+  schema — deleting it breaks the replay story for fresh environments.
+- **`np.interp` semantics**: piecewise-linear interpolation over sorted x
+  anchors; out-of-range inputs return the boundary y values, which is
+  exactly the clamp the hand-rolled version implemented manually.
+
+**Tradeoff accepted:** re-enabling reranking or hybrid retrieval now means
+`git revert`, not an env var. That's deliberate — both were measured-or-
+unmeasured negatives, and resurrection *should* cost a commit that cites a
+new eval run.
+
 ## 2026-07-18 (later) — Closing the measurement loops: directional eval + calibrated confidence
 
 **Directional eval of the taxonomy fix** (`eval/taxonomy_fix_directional.md`):

@@ -33,6 +33,7 @@ Graph shape:
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Literal, TypedDict, cast
 
@@ -323,6 +324,27 @@ def _node_finalize(state: TruthLayerState) -> dict[str, Any]:
             state.get("retry_count", 0),
         )
     return {"low_confidence": low}
+
+
+def result_payload(claim: str, state: Mapping[str, Any]) -> dict[str, Any]:
+    """The verdict fields shared by the /verify response and the SSE result frame.
+
+    Callers must have checked that `state["verdict"]` exists.
+    """
+    verdict = state["verdict"]
+    return {
+        "claim": claim,
+        "verdict": verdict.verdict,
+        "confidence": verdict.confidence,
+        "rationale": verdict.rationale,
+        "sources": verdict.supporting_sources,
+        "source_assessments": [
+            {"url": a.url, "stance": a.stance} for a in verdict.source_assessments
+        ],
+        "sub_claims": state.get("sub_claims", [claim]),
+        "low_confidence": state.get("low_confidence", False),
+        "retries": state.get("retry_count", 0),
+    }
 
 
 def build_graph() -> CompiledStateGraph[TruthLayerState, None, TruthLayerState, TruthLayerState]:

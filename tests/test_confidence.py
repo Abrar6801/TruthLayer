@@ -33,8 +33,3 @@ def test_monotone_never_reorders_verdicts() -> None:
 def test_out_of_range_inputs_clamped() -> None:
     assert remap_confidence(-0.5) == pytest.approx(0.0)
     assert remap_confidence(1.7) == pytest.approx(0.79)
-
-
-def test_custom_anchors_supported() -> None:
-    identity = ((0.0, 0.0), (1.0, 1.0))
-    assert remap_confidence(0.42, anchors=identity) == pytest.approx(0.42)

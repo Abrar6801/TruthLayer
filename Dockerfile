@@ -7,12 +7,10 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
-# CPU-only torch keeps the image ~5GB smaller than the default CUDA build —
-# there is no GPU on the free-tier hosts this deploys to.
 COPY requirements.txt pyproject.toml ./
 COPY src ./src
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
     && /opt/venv/bin/pip install --no-cache-dir --no-deps .
 
 
@@ -21,17 +19,11 @@ FROM python:3.12-slim
 # Never run an internet-facing process as root: if an attacker gets code
 # execution through the app, they land as an unprivileged user inside the
 # container instead of root (which makes container-escape bugs exploitable).
-RUN useradd --create-home --shell /usr/sbin/nologin appuser \
-    # Pre-create the model cache dir owned by appuser — a named volume mounted
-    # here inherits this ownership on first use, so the non-root user can write.
-    && mkdir -p /home/appuser/.cache/huggingface \
-    && chown -R appuser:appuser /home/appuser/.cache
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    # Cache the embedding model somewhere the non-root user can write.
-    HF_HOME=/home/appuser/.cache/huggingface
+    PYTHONUNBUFFERED=1
 
 USER appuser
 WORKDIR /home/appuser

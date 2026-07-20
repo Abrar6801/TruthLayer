@@ -27,7 +27,7 @@ from collections.abc import Iterator
 from typing import Any
 from urllib.parse import urlparse
 
-from truthlayer.graph import TruthLayerState, get_graph
+from truthlayer.graph import TruthLayerState, get_graph, result_payload
 
 logger = logging.getLogger(__name__)
 
@@ -71,29 +71,11 @@ def stream_verification(claim: str) -> Iterator[str]:
                     if node_state:
                         state.update(node_state)
                     frames.put(_progress_frame(node, state))
-            verdict = state.get("verdict")
-            if verdict is None:
+            if state.get("verdict") is None:
                 frames.put(_sse("error", {"message": "Pipeline produced no verdict."}))
             else:
                 frames.put(
-                    _sse(
-                        "result",
-                        {
-                            "claim": claim,
-                            "verdict": verdict.verdict,
-                            "confidence": verdict.confidence,
-                            "rationale": verdict.rationale,
-                            "sources": verdict.supporting_sources,
-                            "source_assessments": [
-                                {"url": a.url, "stance": a.stance}
-                                for a in verdict.source_assessments
-                            ],
-                            "sub_claims": state.get("sub_claims", [claim]),
-                            "low_confidence": state.get("low_confidence", False),
-                            "retries": state.get("retry_count", 0),
-                            "served_from_cache": False,
-                        },
-                    )
+                    _sse("result", {**result_payload(claim, state), "served_from_cache": False})
                 )
         except Exception:
             logger.exception("Streaming verification failed")

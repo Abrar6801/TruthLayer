@@ -154,7 +154,7 @@ def main() -> int:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s")
-    for noisy in ("httpx", "httpcore", "sentence_transformers"):
+    for noisy in ("httpx", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     sys.path.insert(0, str(REPO_ROOT / "src"))

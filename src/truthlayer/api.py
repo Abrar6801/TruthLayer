@@ -36,12 +36,10 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from truthlayer.config import ConfigError, get_settings
+from truthlayer.confidence import remap_confidence
+from truthlayer.config import MAX_CLAIM_LENGTH, ConfigError, get_settings
 
 logger = logging.getLogger(__name__)
-
-#: Same bound the CLI enforces; validated by Pydantic before any logic runs.
-MAX_CLAIM_LENGTH = 1000
 
 
 @asynccontextmanager
@@ -112,7 +110,7 @@ class VerifyResponse(BaseModel):
         default=None,
         description="The judge's uncalibrated stated confidence. `confidence` "
         "is this value remapped through the measured calibration curve "
-        "(confidence.py); null when remapping is disabled.",
+        "(confidence.py); absent on verdicts cached before calibration shipped.",
     )
 
 
@@ -207,7 +205,7 @@ def create_app() -> FastAPI:
             except Exception:
                 return "unreachable"
 
-        async def check_https(name: str, url: str) -> str:
+        async def check_https(url: str) -> str:
             try:
                 async with httpx.AsyncClient(timeout=3.0) as client:
                     await client.get(url)
@@ -216,8 +214,8 @@ def create_app() -> FastAPI:
                 return "unreachable"
 
         deps["database"] = await asyncio.to_thread(check_db)
-        deps["anthropic"] = await check_https("anthropic", "https://api.anthropic.com/v1/models")
-        deps["tavily"] = await check_https("tavily", "https://api.tavily.com")
+        deps["anthropic"] = await check_https("https://api.anthropic.com/v1/models")
+        deps["tavily"] = await check_https("https://api.tavily.com")
         status = "ok" if all(v == "ok" for v in deps.values()) else "degraded"
         return HealthResponse(status=status, dependencies=deps)
 
@@ -264,27 +262,12 @@ def create_app() -> FastAPI:
             logger.error("Graph produced no verdict; errors: %s", state.get("errors"))
             raise HTTPException(status_code=502, detail="Verification pipeline failed")
 
-        response = VerifyResponse(
-            claim=claim,
-            verdict=verdict.verdict,
-            confidence=verdict.confidence,
-            rationale=verdict.rationale,
-            sources=verdict.supporting_sources,
-            source_assessments=[
-                SourceAssessmentOut(url=a.url, stance=a.stance) for a in verdict.source_assessments
-            ],
-            sub_claims=state.get("sub_claims", [claim]),
-            low_confidence=state.get("low_confidence", False),
-            retries=state.get("retry_count", 0),
-        )
-        if settings.confidence_remap_enabled:
-            # Calibrate the DISPLAYED confidence only; the graph's retry gate
-            # already ran against the raw value. Remap before the cache write
-            # so cached and fresh responses agree.
-            from truthlayer.confidence import remap_confidence
-
-            response.raw_confidence = response.confidence
-            response.confidence = remap_confidence(response.confidence)
+        response = VerifyResponse(**truthlayer.graph.result_payload(claim, state))
+        # Calibrate the DISPLAYED confidence only; the graph's retry gate
+        # already ran against the raw value. Remap before the cache write
+        # so cached and fresh responses agree.
+        response.raw_confidence = response.confidence
+        response.confidence = remap_confidence(response.confidence)
         response.verdict_id = await asyncio.to_thread(
             truthlayer.cache.store_verdict,
             claim,
@@ -324,11 +307,8 @@ def create_app() -> FastAPI:
                     payload = json.loads(frame.split("data: ", 1)[1])
                     payload.pop("served_from_cache", None)
                     payload.pop("verdict_id", None)
-                    if settings.confidence_remap_enabled:
-                        from truthlayer.confidence import remap_confidence
-
-                        payload["raw_confidence"] = payload["confidence"]
-                        payload["confidence"] = remap_confidence(payload["confidence"])
+                    payload["raw_confidence"] = payload["confidence"]
+                    payload["confidence"] = remap_confidence(payload["confidence"])
                     verdict_id = await asyncio.to_thread(
                         truthlayer.cache.store_verdict, claim, payload
                     )

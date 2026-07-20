@@ -19,6 +19,11 @@ from dotenv import load_dotenv
 LLMEffort = Literal["low", "medium", "high", "xhigh", "max"]
 _VALID_LLM_EFFORTS = get_args(LLMEffort)
 
+#: Upper bound on claim length, enforced at every entry point (API and CLI) —
+#: the pipeline is designed for short checkable statements, and an unbounded
+#: "claim" is an abuse vector.
+MAX_CLAIM_LENGTH = 1000
+
 #: Environment variables that must be present and non-empty.
 REQUIRED_VARS = (
     "ANTHROPIC_API_KEY",
@@ -88,33 +93,10 @@ class Settings:
     # Cosine similarity below this is treated as "no relevant evidence".
     similarity_threshold: float = 0.35
 
-    # --- reranking (Phase 4.2) ---
-    # Two-stage retrieval: pgvector fetches `retrieval_candidates` (wide),
-    # a cross-encoder reranks (claim, chunk) pairs, and only the top
-    # `retrieval_top_k` reach the judge. Toggleable for A/B eval runs.
-    rerank_enabled: bool = False
-    rerank_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    retrieval_candidates: int = 20
-
     # --- concurrency (Phase 4.3) ---
     # Max simultaneous sub-claim search/fetch cycles. Bounded so a 4-sub-claim
     # decomposition can't fire unbounded Tavily calls into free-tier limits.
     search_concurrency: int = 3
-
-    # --- hybrid retrieval (post-launch) ---
-    # Fuse pgvector cosine ranking with Postgres full-text (ts_rank) via
-    # Reciprocal Rank Fusion. Ships DISABLED, same policy as the reranker:
-    # a retrieval change is enabled only after an eval run shows it helps —
-    # the reranker taught us plausible-sounding retrieval upgrades can
-    # measure negative. Requires migration 005.
-    hybrid_enabled: bool = False
-
-    # --- confidence remapping (post-launch) ---
-    # Display calibrated confidence (confidence.py: stated → measured
-    # accuracy) instead of the judge's raw number, which the calibration
-    # report showed runs ~16 points hot. Applies ONLY at the response
-    # boundary — the graph's retry gate always sees raw confidence.
-    confidence_remap_enabled: bool = True
 
     # --- semantic cache (Phase 4.4) ---
     cache_enabled: bool = True
@@ -210,15 +192,7 @@ def get_settings() -> Settings:
         similarity_threshold=_read_optional_float(
             "SIMILARITY_THRESHOLD", defaults.similarity_threshold
         ),
-        rerank_enabled=os.environ.get("RERANK_ENABLED", "").lower() in ("1", "true", "yes"),
-        rerank_model_name=os.environ.get("RERANK_MODEL_NAME", defaults.rerank_model_name),
-        retrieval_candidates=_read_optional_int(
-            "RETRIEVAL_CANDIDATES", defaults.retrieval_candidates
-        ),
         search_concurrency=_read_optional_int("SEARCH_CONCURRENCY", defaults.search_concurrency),
-        hybrid_enabled=os.environ.get("HYBRID_ENABLED", "").lower() in ("1", "true", "yes"),
-        confidence_remap_enabled=os.environ.get("CONFIDENCE_REMAP_ENABLED", "true").lower()
-        in ("1", "true", "yes"),
         cache_enabled=os.environ.get("CACHE_ENABLED", "true").lower() in ("1", "true", "yes"),
         cache_similarity_threshold=_read_optional_float(
             "CACHE_SIMILARITY_THRESHOLD", defaults.cache_similarity_threshold

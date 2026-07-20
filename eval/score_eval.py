@@ -85,12 +85,7 @@ def score(results: list[dict[str, Any]]) -> dict[str, Any]:
         avg_out = statistics.mean(out_tokens)
         cost_per_claim = (avg_in * PRICE_IN_PER_MTOK + avg_out * PRICE_OUT_PER_MTOK) / 1_000_000
 
-    def pctile(values: list[float], p: float) -> float | None:
-        if not values:
-            return None
-        ordered = sorted(values)
-        idx = min(len(ordered) - 1, round(p * (len(ordered) - 1)))
-        return ordered[int(idx)]
+    latencies.sort()
 
     failures = [
         {
@@ -115,8 +110,8 @@ def score(results: list[dict[str, Any]]) -> dict[str, Any]:
         "accuracy_by_difficulty": {k: sum(v) / len(v) for k, v in sorted(by_difficulty.items())},
         "retrieval_hit_rate": retrieval_hits / retrieval_total if retrieval_total else None,
         "retrieval_checked": retrieval_total,
-        "latency_p50": pctile(latencies, 0.50),
-        "latency_p95": pctile(latencies, 0.95),
+        "latency_p50": statistics.median(latencies) if latencies else None,
+        "latency_p95": latencies[round(0.95 * (len(latencies) - 1))] if latencies else None,
         "stage_avg_seconds": stage_avgs,
         "avg_llm_calls": statistics.mean(llm_calls) if llm_calls else None,
         "avg_input_tokens": statistics.mean(in_tokens) if in_tokens else None,

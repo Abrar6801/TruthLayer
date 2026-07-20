@@ -41,7 +41,6 @@ packages = ["truthlayer"]
 # These libraries ship without type stubs; don't fail the build on them.
 module = [
     "trafilatura.*",
-    "sentence_transformers.*",
     "supabase.*",
 ]
 ignore_missing_imports = true

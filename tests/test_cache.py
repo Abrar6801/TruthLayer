@@ -8,6 +8,7 @@ near-misses (negations, entity swaps) from legitimate paraphrase hits.
 
 from __future__ import annotations
 
+import math
 import os
 from contextlib import contextmanager
 from typing import Any
@@ -149,10 +150,11 @@ PARAPHRASE_PAIRS = [
 
 def _real_similarity(a: str, b: str) -> float:
     from truthlayer.embedding import embed_texts
-    from truthlayer.retrieval import cosine_similarity
 
     va, vb = embed_texts([a, b])
-    return cosine_similarity(va, vb)
+    dot = sum(x * y for x, y in zip(va, vb, strict=True))
+    norms = math.sqrt(sum(x * x for x in va)) * math.sqrt(sum(y * y for y in vb))
+    return dot / norms
 
 
 @_skip_unless_live

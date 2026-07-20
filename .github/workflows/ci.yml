@@ -19,10 +19,8 @@ jobs:
             requirements-dev.txt
 
       - name: Install dependencies
-        # CPU-only torch index, same as the Dockerfile: CI has no GPU and the
-        # default CUDA wheels are ~2GB heavier for nothing.
         run: |
-          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt -r requirements-dev.txt
+          pip install -r requirements.txt -r requirements-dev.txt
           pip install -e .
 
       - name: Lint (ruff)

@@ -25,6 +25,8 @@ number measured to be meaningless.
 
 from __future__ import annotations
 
+import numpy as np
+
 #: (stated_confidence, measured_accuracy) anchors, monotone non-decreasing.
 #: Provenance: reliability table of eval/calibration_report.md — bins
 #: 0.7-0.8 → 0.50 (n=2), 0.8-0.9 → 0.75 (n=4), 0.9-1.0 → 0.79 (n=34),
@@ -41,19 +43,12 @@ CALIBRATION_ANCHORS: tuple[tuple[float, float], ...] = (
 )
 
 
-def remap_confidence(raw: float, anchors: tuple[tuple[float, float], ...] | None = None) -> float:
-    """Map a raw stated confidence to calibrated (empirical-accuracy) scale.
+def remap_confidence(raw: float) -> float:
+    """Map a raw stated confidence to the calibrated (empirical-accuracy) scale.
 
-    Piecewise-linear interpolation through the measured anchors; inputs are
-    clamped into [0, 1] first. Monotone by construction, so remapping never
-    reorders two verdicts by confidence.
+    Piecewise-linear interpolation through the measured anchors; np.interp
+    clamps out-of-range inputs to the end anchors. Monotone by construction,
+    so remapping never reorders two verdicts by confidence.
     """
-    points = anchors if anchors is not None else CALIBRATION_ANCHORS
-    x = min(1.0, max(0.0, raw))
-    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
-        if x <= x1:
-            if x1 == x0:  # duplicate anchor x — take the right-hand value
-                return round(y1, 4)
-            fraction = (x - x0) / (x1 - x0)
-            return round(y0 + fraction * (y1 - y0), 4)
-    return round(points[-1][1], 4)
+    xs, ys = zip(*CALIBRATION_ANCHORS, strict=True)
+    return round(float(np.interp(raw, xs, ys)), 4)

@@ -132,8 +132,7 @@ Flag rationale (the interview-answer version):
   vCPU during requests, so the default concurrency of 3 (config.py) applies
   and parallel search fan-out works as designed.
 
-First build takes ~10 min (torch is still a build dependency for the optional
-reranker). `.gcloudignore` limits the upload to what the Dockerfile actually
+`.gcloudignore` limits the upload to what the Dockerfile actually
 builds from — critically it excludes `.env*` (secrets stay off the wire) and
 `frontend/` (whose node_modules shims crash gcloud's Windows uploader). The
 command prints the service URL, shaped like

@@ -7,8 +7,14 @@ from typing import Any
 import pytest
 
 import truthlayer.ingest as ingest_module
-from truthlayer.ingest import gather_evidence
+from truthlayer.ingest import collect_chunks_for_query, embed_and_store
 from truthlayer.search import SearchResult
+
+
+def _ingest(claim: str) -> int:
+    """Collect + store, the same two calls the graph node makes."""
+    chunks, urls, _, dates = collect_chunks_for_query(claim)
+    return embed_and_store(chunks, urls, claim_query=claim, published_dates=dates)
 
 
 @pytest.fixture()
@@ -36,12 +42,12 @@ def captured_inserts(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return captured
 
 
-def test_gather_evidence_no_results(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ingest_no_results(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ingest_module, "tavily_search", lambda claim: [])
-    assert gather_evidence("some claim") == 0
+    assert _ingest("some claim") == 0
 
 
-def test_gather_evidence_stores_chunks(
+def test_ingest_stores_chunks(
     monkeypatch: pytest.MonkeyPatch, captured_inserts: dict[str, Any]
 ) -> None:
     results = [
@@ -50,7 +56,7 @@ def test_gather_evidence_stores_chunks(
     ]
     monkeypatch.setattr(ingest_module, "tavily_search", lambda claim: results)
 
-    stored = gather_evidence("test claim")
+    stored = _ingest("test claim")
 
     assert stored == len(captured_inserts["chunks"]) > 0
     assert captured_inserts["claim_query"] == "test claim"
@@ -59,7 +65,7 @@ def test_gather_evidence_stores_chunks(
     assert set(captured_inserts["source_urls"]) == {"https://a.example", "https://b.example"}
 
 
-def test_gather_evidence_caps_chunk_count(
+def test_ingest_caps_chunk_count(
     monkeypatch: pytest.MonkeyPatch, captured_inserts: dict[str, Any]
 ) -> None:
     monkeypatch.setenv("MAX_CHUNKS_PER_CLAIM", "5")
@@ -76,7 +82,7 @@ def test_gather_evidence_caps_chunk_count(
     )
     monkeypatch.setattr(ingest_module, "tavily_search", lambda claim: [huge_page])
 
-    stored = gather_evidence("flood attempt")
+    stored = _ingest("flood attempt")
 
     assert stored == 5  # capped, not unbounded
     assert len(captured_inserts["chunks"]) == 5
