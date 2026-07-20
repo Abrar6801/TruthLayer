@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local model cache (sentence-transformers downloads models here if HF_HOME is set locally)
 .model_cache/
+
+# Claude Code local session/plugin config
+.claude/
